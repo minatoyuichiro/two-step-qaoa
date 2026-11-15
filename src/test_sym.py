@@ -1,4 +1,4 @@
-"""Sym（対称部分空間）が 2^n 次元の計算（tsq.Fast、blueqat と一致済み）と一致するか。"""
+"""Check whether Sym (the symmetric subspace) matches the 2^n-dimensional computation (tsq.Fast, already verified against blueqat)."""
 import numpy as np, torch, tsq, sym, math
 
 rng = np.random.default_rng(5)
@@ -12,7 +12,7 @@ for n, k in ((4, 1), (6, 3), (7, 2), (9, 4)):
         pw = np.array([float((full.abs() ** 2)[torch.tensor(F.X.sum(1) == w)].sum()) for w in range(n + 1)])
         ps = (S.stage1(th, k, p1).abs() ** 2).numpy()
         assert np.abs(pw - ps).max() < 1e-12, (n, k, p1, np.abs(pw - ps).max())
-    # 偏った積状態の P_k
+    # P_k of the biased product state
     q = k / n
     th = 2 * math.asin(math.sqrt(q))
     st = tsq.run_state(n, lambda c: c.ry(th)[:]).numpy()

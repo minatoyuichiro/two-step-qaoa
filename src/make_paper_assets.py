@@ -1,5 +1,5 @@
-"""論文の図と表を results/ から作る → paper/figs/*.pdf, paper/tables/*.tex
-色は dataviz の既定の並び（決まった順、検証済み）。明るい面だけ（印刷用）。系列は凡例 ＋ 印の形でも見分けられるようにする。"""
+"""Build the paper figures and tables from results/ -> paper/figs/*.pdf, paper/tables/*.tex
+Colors use the dataviz default sequence (fixed order, validated). Light surfaces only (for print). Series should also be distinguishable by legend + marker shape."""
 import collections
 import glob
 import json
@@ -33,13 +33,13 @@ def load(pattern):
     return rows
 
 
-# ---------------------------------------------------------------- S2: 段1 の表
+# ---------------------------------------------------------------- S2: stage 1 table
 s2 = load(f'{R}/s2/table_*.json')
 by = {}
 for r in s2:
     by.setdefault((r['n'], r['k']), {})[r['p1']] = r
 fig, axs = plt.subplots(1, 2, figsize=(6.4, 2.6), sharey=True)
-NS = [4, 8, 12, 16, 20, 24, 32]          # 7 系列まで（色を一巡させない）。同じ n は左右で同じ色
+NS = [4, 8, 12, 16, 20, 24, 32]          # Up to 7 series (do not cycle colors). Same n uses the same color on left and right
 for ax, kind, title in ((axs[0], 'half', r'half filling, $k=n/2$'), (axs[1], 'one', r'one-hot, $k=1$')):
     for i, n in enumerate(NS):
         k = n // 2 if kind == 'half' else 1
@@ -74,7 +74,7 @@ for (n, k), d in sorted(by.items()):
 lines += [r'\bottomrule\end{tabular}\end{table}']
 open(f'{TAB}/stage1.tex', 'w').write('\n'.join(lines) + '\n')
 
-# ---------------------------------------------------------------- S1b: ポートフォリオ
+# ---------------------------------------------------------------- S1b: portfolio
 s1 = load(f'{R}/s1b/*.json')
 NAMES = collections.OrderedDict([('two_step_complete', 'Two-Step (complete XY)'), ('two_step', 'Two-Step (ring XY)'), ('penalty_ladder', 'penalty, ladder from $A_{\\rm start}$'),
                                  ('penalty_ladder_low', 'penalty, ladder from $A_{\\rm start}/16$'),
@@ -134,7 +134,7 @@ if sizes:
         lines[-1] = r'\bottomrule\end{tabular}}\end{table}'
         open(f'{TAB}/{tag}.tex', 'w').write('\n'.join(lines) + '\n')
 
-# ---------------------------------------------------------------- S3: 検出
+# ---------------------------------------------------------------- S3: detection
 s3 = [r for r in json.load(open(f'{R}/s3_detect.json')) if 'error' not in r]
 tot = collections.Counter()
 per = collections.OrderedDict()
@@ -155,7 +155,7 @@ for name, a in per.items():
 lines += [r'\bottomrule\end{tabular}\end{table}']
 open(f'{TAB}/detect.tex', 'w').write('\n'.join(lines) + '\n')
 
-# ---------------------------------------------------------------- S5 / S4b: 組が複数ある問題
+# ---------------------------------------------------------------- S5 / S4b: problems with multiple groups
 s5 = load(f'{R}/s5/*.json')
 if s5:
     s5 = list({(r['name'], r['size'], r['seed'], r['method'], r['p']): r for r in s5}.values())

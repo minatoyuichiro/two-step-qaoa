@@ -1,4 +1,4 @@
-"""Fast の結果が blueqat の statevector と（大域位相を除き）一致するか。"""
+"""Check whether Fast's result matches blueqat's statevector (up to global phase)."""
 import numpy as np, torch, tsq
 
 def fid(a, b):
@@ -25,9 +25,9 @@ it = tsq.to_ising(Q + 1.7 * P)
 th = torch.tensor(rng.normal(size=6))
 print('penalty fid', fid(tsq.state_penalty_qaoa(n, it, th, 3), tsq.fast_penalty_qaoa(F, F.diag(*it[1:]), th, 3)))
 
-# 重なる組は受け付けない
+# Do not accept overlapping groups
 try:
     tsq.Fast(4).xymix(tsq.Fast(4).plus(), [(0, 1), (1, 2)], torch.tensor(0.3))
-    raise SystemExit('重なる組が通ってしまった')
+    raise SystemExit('Overlapping groups passed')
 except ValueError:
     print('overlap rejected ok')

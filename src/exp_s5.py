@@ -1,22 +1,22 @@
-"""S5（と S4 の強化版）: 定式化ライブラリ の問題で、重ならない組を固める。学習は S1b と同じ INTERP 法（pipe.train_interp）、p ≤ 5。
-彩色のように組が全変数を覆う問題では、全部を固められる（残る罰則なし）。以下は S4 の説明をそのまま引き継ぐ。
+"""S5 (and the hardened version of S4): harden non-overlapping groups in formulation library instances. Training uses the same INTERP method as S1b (pipe.train_interp), p <= 5.
+In problems where the groups cover all variables, such as coloring, everything can be hardened (no remaining penalty). The description of S4 is carried over below.
 
-S4: 組が重なる問題（割当・TSP など）で、重ならない組だけを固め、残りは罰則のまま残す（一部だけ固める）。
+S4: In problems where groups overlap (assignment, TSP, etc.), harden only the non-overlapping groups and leave the rest as penalties (partial hardening).
 
-1 つ = 定式化ライブラリ の qrandom が作った問題 1 つ（名前・大きさ・種）× 方式 × 段2 の層の数 p。
-問題も罰則の重み A の段階づけ（A_start から倍、上限 A_safe）も、定式化ライブラリ の qsolve の問題クラスそのもの。
-正解の制約 = 組み立ての途中で add_onehot / add_sum_eq（係数なし・K が整数）が呼ばれた組（S3 と同じ記録の仕方）。
-  cost = QUBO 全体 − 記録した罰則すべて（= 純粋なコスト）。可行 = 記録した制約すべてを満たす。最適 = 可行の中で cost が最小。
-方式:
-  penalty_ladder : 素の QAOA（|+>・X ミキサー・QUBO 全体）。定式化ライブラリ と同じ段階づけで A を上げる。
-  partial_ladder : 重ならない組（定式化ライブラリ が固めに選ぶ groups と同じ）を XY で固める。段1 は組ごとに表の角度（学習 0 回）、
-                   段2 のコストは「QUBO 全体 − 固めた組の罰則」（残りの罰則はそのまま）。A は同じく段階づけ。
-                   段1 は前もって作った表（results/s2）から引く。表に無い大きさなら止まる。
-  uniform_feasible : 可行解を一様に引く（古典の基準）。
-  ※ 学習ではハミルトニアンを最大絶対値で割る。段階づけでは、判定に使った抽出をそのまま答えにし、全部数える。
-                   学習は固めた組について事後選択した期待値で行い、ショットは 1/P(固めた組がすべて満たされる) 倍で数える。
-手間の数え方は S1 と同じ（評価 1 回 = 1000 ショット、勾配はパラメータシフト）。
-使い方: PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/path/to/formulation_library:. python3 exp_s5.py out.json name:size [name:size ...]
+One = one instance (name, size, seed) created by qrandom of formulation library x method x number of stage 2 layers p.
+The problem and the ladder of penalty weights A (multiply from A_start, upper bound A_safe) are the formulation library qsolve problem class itself.
+Correct constraints = the groups for which add_onehot / add_sum_eq (no coefficients, integer K) were called during construction (same recording as S3).
+  cost = whole QUBO - all recorded penalties (= pure cost). Feasible = satisfies all recorded constraints. Optimal = minimum cost among feasible.
+Methods:
+  penalty_ladder : penalty QAOA (|+>, X mixer, whole QUBO). Raise A with the same ladder as formulation library.
+  partial_ladder : harden non-overlapping groups (same as the groups formulation library chooses to harden) with XY. Stage 1 uses the table angles per group (0 training),
+                   stage 2 cost is "whole QUBO - penalties of hardened groups" (remaining penalties unchanged). A is laddered the same way.
+                   Stage 1 is looked up from a prebuilt table (results/s2). If the size is not in the table, stop.
+  uniform_feasible : draw feasible solutions uniformly (classical baseline).
+  NOTE: In training, divide the Hamiltonian by the maximum absolute value. In the ladder, use the extraction used for the decision as the answer and count all.
+                   Training uses the post-selection expected value over the hardened groups, and shots are counted multiplied by 1/P(all hardened groups satisfied).
+Cost is counted the same as S1 (1 evaluation = 1000 shots, gradients by parameter shift).
+Usage: PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/path/to/formulation_library:. python3 exp_s5.py out.json name:size [name:size ...]
 """
 import json
 import math
@@ -55,7 +55,7 @@ qo.add_onehot, qo.add_sum_eq = rec_onehot, rec_sumeq
 
 OUT = sys.argv[1]
 JOBS = [(a.split(':')[0], int(a.split(':')[1])) for a in sys.argv[2:]]
-SEEDS = tuple(int(s) for s in __import__("os").environ.get("SEEDS", "1,2,3,4,5").split(","))   # 例ごとに並べて回すとき SEEDS=3 などで絞る
+SEEDS = tuple(int(s) for s in __import__("os").environ.get("SEEDS", "1,2,3,4,5").split(","))   # Limit with SEEDS=3 etc. when running over instances one by one
 PMAX = 5
 S_EVAL, S_FINAL = 1000, 1000
 RESTARTS, ITERS, LR = 4, 150, 0.05
@@ -109,12 +109,12 @@ TABLES = sorted(__import__('glob').glob(__import__('os').path.join(__import__('o
 
 
 def stage1_weights(m, k):
-    """組の大きさ m・k の段1 を、前もって作って固定した表（results/s2/table_*.json）から引く（P_k ≥ 0.99 の最小 p1。
-    無ければ表の最良）。表に無ければ止まる（その場で作らない）。重み w ごとの振幅を返す。"""
+    """Look up stage 1 for group sizes m, k from a prebuilt fixed table (results/s2/table_*.json) (minimum p1 with P_k >= 0.99.
+    Otherwise the best in the table). If not in the table, stop (do not build on the fly). Return the amplitudes for each weight w."""
     if (m, k) not in _s1cache:
         rows = [r for f in TABLES for r in json.load(open(f)) if r['n'] == m and r['k'] == k]
         if not rows:
-            raise SystemExit(f'段1 の表に ({m}, {k}) が無い。先に exp_s2_table.py で作ること')
+            raise SystemExit(f'Stage 1 table has no ({m}, {k}). Build it first with exp_s2_table.py')
         ok = sorted([r for r in rows if r['P_k'] >= 0.99], key=lambda r: r['p1'])
         r = ok[0] if ok else max(rows, key=lambda r: r['P_k'])
         S = sym.Sym(m)
@@ -124,7 +124,7 @@ def stage1_weights(m, k):
 
 
 def product_state(F, groups, ks):
-    """固めた組ごとに段1 の対称状態、残りの量子ビットは |+>。全体はその積。"""
+    """Stage 1 symmetric state for each hardened group, remaining qubits in |+>. The whole is their product."""
     n = F.n
     amp = torch.ones(2 ** n, dtype=torch.complex128)
     covered = set()
@@ -138,8 +138,8 @@ def product_state(F, groups, ks):
 
 
 def make_data(name, size, seed):
-    """coloring_dense は、定式化ライブラリ の彩色クラスに渡す密なグラフ（辺の確率 0.7、3 色）。定式化ライブラリ の乱数のグラフは疎で、
-    正しい塗り分けが多すぎて物差しにならないため。それ以外は 定式化ライブラリ の qrandom をそのまま使う。"""
+    """coloring_dense is a dense graph (edge probability 0.7, 3 colors) passed to the coloring class of formulation library. The random graphs of formulation library are sparse, and
+there are too many proper colorings to serve as a benchmark. Otherwise use qrandom of formulation library as is."""
     if name == 'coloring_dense':
         import random
         r = random.Random(seed)

@@ -1,10 +1,10 @@
-"""S1b・S5 で共通に使う学習の部品（Codex r2 の指摘 #8・#10 を受けて）。
+"""Learning components shared by S1b and S5.
 
-train_interp: 層を 1 つずつ足して学習する（INTERP 法、Zhou ら 2020）。深さ p の初期値は、
-  深さ p−1 の解の線形補間と、0 の層を足したもの（こちらは前の深さと同じ値を保つ）、それに乱数の初期値 RAND 個。
-  候補ごとに Adam を ITERS 歩、途中で最良の点を残す。
-  深さ p の結果の手間 = 深さ 1〜p の学習に使った評価回数の累計（深さ p の答えを得るには、前の深さも学習するので）。
-ハミルトニアンは、呼ぶ側で最大絶対値で割ってから渡すこと（全方式で同じ扱いにする）。
+train_interp: train by adding layers one at a time (the INTERP method, Zhou et al. 2020). The initial values at depth p are
+  the linear interpolation of the solution at depth p-1 plus a zero layer (which keeps the same values as the previous depth), plus RAND random initial values.
+  For each candidate, run Adam for ITERS steps and keep the best point along the way.
+  The cost of the result at depth p = the cumulative number of evaluations used for training at depths 1..p (since obtaining the answer at depth p requires training the previous depths as well).
+The caller must divide the Hamiltonian by its maximum absolute value before passing it (use the same treatment for all methods).
 """
 import math
 
@@ -35,8 +35,8 @@ def _interp(v):
 
 
 def train_interp(loss_at, pmax, seed, iters=ITERS, rand=RAND):
-    """loss_at(x, p) を p = 1..pmax について最小化。返り値: {p: (params, 評価回数の累計)}。
-    評価回数 = 歩数 × (1 + 2·パラメータ数)（パラメータシフトとみなした目安）。"""
+    """Minimize loss_at(x, p) for p = 1..pmax. Returns: {p: (params, cumulative number of evaluations)}.
+    number of evaluations = steps × (1 + 2·number of parameters) (an estimate treating it as parameter shift)."""
     g = torch.Generator().manual_seed(seed)
     out, prev, evals = {}, None, 0
     for p in range(1, pmax + 1):
@@ -60,7 +60,7 @@ def train_interp(loss_at, pmax, seed, iters=ITERS, rand=RAND):
 
 
 def bootstrap_median_ci(x, n=2000, seed=0, q=(2.5, 97.5)):
-    """例ごとの比の中央値の 95% 区間（例をブートストラップで引き直す）。"""
+    """95% interval of the median of the ratio per instance (resampling instances by bootstrap)."""
     x = np.asarray(x, float)
     r = np.random.default_rng(seed)
     meds = [np.median(r.choice(x, size=len(x), replace=True)) for _ in range(n)]

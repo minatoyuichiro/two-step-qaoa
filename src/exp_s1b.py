@@ -1,21 +1,21 @@
-"""S1b: S1 の強化版。全方式の学習を INTERP 法（pipe.train_interp）に揃え、p ≤ 5、例を増やす。
+"""S1b: enhanced version of S1. Align learning across all methods with the INTERP scheme (pipe.train_interp), use p <= 5, and more instances.
 
-1 つ = ポートフォリオの例 1 つ（n 銘柄から k 銘柄、seed で決まる）× 方式 × 段2 の層の数 p。
-手間（ショット）の数え方は S1 と同じ目安: 評価 1 回 = S_EVAL ショット、勾配はパラメータシフト 2 回/角度とみなす。
-深さ p の手間には、深さ 1〜p−1 の学習も含める（INTERP は前の深さから始めるので）。
-事後選択で学習する方式は、学習のショットを 1/P_k 倍で数える。どの方式も、学習ではハミルトニアンを最大絶対値で割る。
-方式:
-  uniform_feasible     可行解を一様に引く（古典の基準）
-  penalty_ladder       素の QAOA。罰則 A は 定式化ライブラリ の Portfolio と同じ A_start から、制約を破ったら倍（上限 A_safe）。
-                       深さ p ごとに「その深さの抽出で可行が出た最初の段」で止まり、そこまでの段の手間を全部足す。
-                       判定に使った抽出をそのまま答えにする。
-  penalty_ladder_low   同じ段階づけを A_start/16 から
-  penalty_grid_deploy  A = σ·{0.03, 0.1, 0.3, 1, 3} を全部学習し、各 1000 ショットの可行で最良の目的が一番良い点を選ぶ（σ だけ神託）
-  penalty_grid         同じ 5 点から、厳密な P_opt で選ぶ（神託）
-  two_step             段1 は表から（学習 0 回）→ 段2 は XY リング、事後選択の <C> で学習
-  bp_xy                偏った積状態（CNOT 0 個）→ XY → 事後選択
-  xy_dicke             厳密な Dicke から XY（参照）
-使い方: python3 exp_s1b.py n k seeds out.json table.json[,table2.json...]
+One unit = one portfolio instance (k out of n assets, determined by seed) x method x number of stage-2 layers p.
+Cost (shots) is counted as in S1: one evaluation = S_EVAL shots, and gradients are treated as 2 parameter-shift evaluations per angle.
+The cost at depth p includes learning at depths 1 to p-1 (since INTERP starts from the previous depth).
+For methods trained with post-selection, learning shots are counted with a factor of 1/P_k. For every method, the Hamiltonian is divided by its maximum absolute value during training.
+Methods:
+  uniform_feasible     draw feasible solutions uniformly (classical baseline)
+  penalty_ladder       penalty QAOA. The penalty A starts from the same A_start as Portfolio in the formulation library, and doubles when a constraint is violated (capped at A_safe).
+                       For each depth p, stop at the first stage where the sampling at that depth produced a feasible solution, and sum the cost of all stages up to that point.
+                       The sample used for the decision is returned as the answer.
+  penalty_ladder_low   same ladder starting from A_start/16
+  penalty_grid_deploy  train all A = sigma*{0.03, 0.1, 0.3, 1, 3}, and select the point with the best feasible objective over 1000 shots each (oracle only for sigma)
+  penalty_grid         select from the same 5 points using the exact P_opt (oracle)
+  two_step             stage 1 from the table (no training) -> stage 2 with XY ring, trained on post-selected <C>
+  bp_xy                biased product state (0 CNOTs) -> XY -> post-selection
+  xy_dicke             exact Dicke -> XY (reference)
+Usage: python3 exp_s1b.py n k seeds out.json table.json[,table2.json...]
 """
 import json
 import math
@@ -38,21 +38,21 @@ S_EVAL, S_FINAL = 1000, 1000
 GRID = (0.03, 0.1, 0.3, 1.0, 3.0)
 P_TARGET = 0.99
 import os
-KIND = os.environ.get('XY', 'ring')          # XY ミキサーの対: ring（既定）か complete（全結合）
-ONLY_XY = os.environ.get('ONLY_XY') == '1'     # 1 なら制約を保つ方式だけ回す（S1c: 全結合 XY の追加実験）
+KIND = os.environ.get('XY', 'ring')          # XY mixer pair: ring (default) or complete (all-to-all)
+ONLY_XY = os.environ.get('ONLY_XY') == '1'     # if 1, run only constraint-preserving methods (S1c: additional experiment for all-to-all XY)
 
 
 def stage1_from_table(n, k):
     rows = [r for f in TABLES for r in json.load(open(f)) if r['n'] == n and r['k'] == k]
     if not rows:
-        raise SystemExit(f'段1 の表に ({n}, {k}) が無い')
+        raise SystemExit(f'no ({n}, {k}) in the stage 1 table')
     ok = sorted([r for r in rows if r['P_k'] >= P_TARGET], key=lambda r: r['p1'])
     r = ok[0] if ok else max(rows, key=lambda r: r['P_k'])
     return r['p1'], torch.tensor(r['params'], dtype=torch.float64), r['P_k']
 
 
 def portfolio_A(Q, n):
-    """定式化ライブラリ の Portfolio と同じ A_start・A_safe。"""
+    """Same A_start and A_safe as Portfolio in the formulation library."""
     lin = {i: Q[i, i] for i in range(n)}
     quad = {(i, j): Q[i, j] + Q[j, i] for i in range(n) for j in range(i + 1, n)}
     R = sum(abs(v) for v in lin.values()) + sum(abs(v) for v in quad.values())
@@ -116,7 +116,7 @@ for seed in SEEDS:
         res = pipe.train_interp(lambda x, p: (tsq.fast_penalty_qaoa(F, dn, x, p).abs() ** 2) @ dn, PMAX, seed * 10 + tag)
         return {p: (tsq.fast_penalty_qaoa(F, dn, x, p).detach(), ev * S_EVAL) for p, (x, ev) in res.items()}
 
-    # 段階づけ（深さごとに止まる段を決める。段は必要になったときだけ学習する）
+    # ladder (the stopping stage is determined per depth; stages are trained only when needed)
     for method, A0, tag in (() if ONLY_XY else (('penalty_ladder', A_start, 1), ('penalty_ladder_low', A_start / 16, 2))):
         rungs, A = [], A0
         stop = {}
@@ -128,7 +128,7 @@ for seed in SEEDS:
                     continue
                 smp = draw(st[p][0], 1000 * tag + 10 * len(rungs) + p)
                 if feas[smp].any() or A >= A_safe:
-                    shots = sum(r[1][p][1] + S_FINAL for r in rungs)     # 止まった段までの学習と抽出を全部
+                    shots = sum(r[1][p][1] + S_FINAL for r in rungs)     # all training and sampling up to the stopping stage
                     stop[p] = (st[p][0], shots, smp, A, len(rungs))
             if A >= A_safe:
                 break
@@ -136,7 +136,7 @@ for seed in SEEDS:
         for p, (s, shots, smp, Au, nr) in sorted(stop.items()):
             finish(method, s, shots, p, smp, A_used_over_sigma=Au / sigma, rungs=nr)
 
-    # λ の格子
+    # lambda grid
     cand = {p: [] for p in range(1, PMAX + 1)}
     for c in (() if ONLY_XY else GRID):
         st = penalty_states(c * sigma, 3)
@@ -153,7 +153,7 @@ for seed in SEEDS:
         b = min(cand[p], key=lambda d: d['key'])
         finish('penalty_grid_deploy', b['s'], shots, p, b['smp'], lam_over_sigma=b['c'])
 
-    # 制約を保つ方式（事後選択の <C> で学習）
+    # constraint-preserving methods (trained on post-selected <C>)
     for method, s0, pk, tag in (('two_step', s1, pk1, 4), ('bp_xy', bp, pk_bp, 5), ('xy_dicke', D, 1.0, 6))[: (1 if ONLY_XY else 3)]:
         def L(x, p, s0=s0):
             pr = tsq.fast_xy(F, groups, dcn, x, p, s0, KIND).abs() ** 2

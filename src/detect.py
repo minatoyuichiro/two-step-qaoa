@@ -1,18 +1,18 @@
-"""QUBO の行列（quad・lin）だけから、k-hot の罰則 A(Σ_{i∈g} x_i − k)² を見つける。
+"""Find the k-hot penalty A(Σ_{i∈g} x_i − k)² from the QUBO matrices (quad, lin) alone.
 
-罰則は、組 g の中の対すべてに同じ結合 2A を、各変数の一次の項に A(1 − 2k) を足す。
-手順:
- 0. 正の結合を大きい順に並べ、最大の段差より下の値は罰則の候補にしない（罰則はコストより大きく選ばれる前提）。
- 1. 正の結合を値ごとに束ねる（相対誤差 REL 以内は同じ値とみなす）。値 v の対だけで作ったグラフの
-    極大クリーク（大きさ 2 以上）を、A = v/2 の候補にする。
-    コストが同じ対に足されて値がばらつく場合（ポートフォリオなど）に備え、結合を大きい順に並べて
-    最大の段差より上の対でも同じことをする。
- 2. 候補ごとに、一次の項を「候補の罰則の和 ＋ 残り」と見て k を最小二乗で解く。
-    整数から KTOL 以内で、1 ≤ k ≤ |g| − 1 のものだけを残す。
- 3. 固める組を選ぶ: 重ならない組を、大きいものから貪欲に取る（重なる組は罰則のまま残す）。
-⚠️ k は行列だけからは原理的に決まらない: A(Σx−k)² = A(Σx−k')² ＋ 2A(k'−k)Σx ＋ 定数 なので、
-   コストの一次の項の「組全体に一様な部分」と k を分けられない。ここでは「コストの一次の項は A より十分小さい」と仮定して丸める。
-⚠️ 見つけたものは「罰則の形をしている」だけで、本当に制約かどうかは利用者が決める（式を渡せば、この推測は要らない）。
+The penalty adds the same coupling 2A to every pair in group g, and A(1 − 2k) to the linear term of each variable.
+Procedure:
+ 0. Sort positive couplings in descending order, and do not treat values below the largest gap as penalty candidates (the penalty is assumed to be chosen larger than the cost).
+ 1. Bucket positive couplings by value (values within relative tolerance REL are treated as the same value). For the graph made only of pairs with value v,
+    take maximal cliques (size 2 or more) as candidates for A = v/2.
+    In case the cost is added to pairs with the same value and the values vary (e.g. portfolio), sort couplings in descending order and
+    do the same for pairs above the largest gap.
+ 2. For each candidate, view the linear terms as "the sum of the candidate penalties + the rest" and solve for k by least squares.
+    Keep only those within KTOL of an integer with 1 ≤ k ≤ |g| − 1.
+ 3. Choose groups to harden: greedily take non-overlapping groups starting from the largest (overlapping groups are left as penalties).
+NOTE: k cannot in principle be determined from the matrices alone: since A(Σx−k)² = A(Σx−k')² + 2A(k'−k)Σx + const,
+   the "uniform part over the whole group" of the linear cost terms cannot be separated from k. Here we assume "the linear cost terms are sufficiently smaller than A" and round.
+NOTE: What is found merely "looks like a penalty"; whether it is truly a constraint is decided by the user (if the formula is given, this guess is unnecessary).
 """
 import itertools
 
@@ -34,10 +34,10 @@ def candidates(quad):
     if not pos:
         return []
     out = {}
-    # 罰則はふつう一番大きい結合（A はコストより大きく選ぶ）。正の結合を大きい順に並べた最大の段差より下は候補にしない
+    # The penalty is usually the largest coupling (A is chosen larger than the cost). Values below the largest gap in the descending order of positive couplings are not candidates
     sv = np.sort(np.array(list(pos.values())))
     cut = sv[int(np.argmax(sv[1:] / np.maximum(sv[:-1], 1e-12))) + 1] if len(sv) >= 2 else sv[0]
-    # 1a. 値ごと
+    # 1a. By value
     vals = sorted(set(pos.values()))
     classes = []
     for v in vals:
@@ -52,7 +52,7 @@ def candidates(quad):
         for c in _cliques(pairs):
             if len(c) * (len(c) - 1) // 2 == sum(1 for a, b in itertools.combinations(sorted(c), 2) if (a, b) in pairs or (b, a) in pairs):
                 out.setdefault(c, v0 / 2)
-    # 1b. 最大の段差より上（値がばらつく場合）
+    # 1b. Above the largest gap (when values vary)
     if len(sv) >= 2:
         pairs = [e for e, v in pos.items() if v >= cut]
         for c in _cliques(pairs):
@@ -62,7 +62,7 @@ def candidates(quad):
 
 
 def fit_k(cands, lin, n):
-    """一次の項 lin_i ≈ Σ_g A_g (1 − 2 k_g) [i∈g] ＋ 残り を、k_g について最小二乗で解く。"""
+    """Solve the linear terms lin_i ≈ Σ_g A_g (1 − 2 k_g) [i∈g] + the rest for k_g by least squares."""
     if not cands:
         return []
     M = np.zeros((n, len(cands)))
@@ -86,7 +86,7 @@ def detect(quad, lin, n):
 
 
 def choose_disjoint(found):
-    """重ならない組を、大きいものから貪欲に選ぶ（同じ大きさなら A の大きいもの）。"""
+    """Greedily select non-overlapping groups starting from the largest (for equal sizes, the one with the larger A)."""
     used, out = set(), []
     for c, k, A, kf in sorted(found, key=lambda t: (-len(t[0]), -t[2])):
         if not (used & c):

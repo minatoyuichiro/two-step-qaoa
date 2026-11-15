@@ -1,6 +1,6 @@
-"""S2: 段1 の角度の表。1 行 = (n, k, p1) の組 1 つ。
-段1 はコストを含まないので、この表は問題の中身によらず使い回せる（ライブラリに同梱する想定）。
-使い方: python3 exp_s2_table.py <out.json> n:k [n:k ...]"""
+"""S2: Table of stage 1 angles. One row = one (n, k, p1) group.
+Stage 1 does not include cost, so this table can be reused regardless of the problem contents (intended to be bundled with the library).
+Usage: python3 exp_s2_table.py <out.json> n:k [n:k ...]"""
 import json, math, sys, time
 import sym
 

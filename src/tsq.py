@@ -1,7 +1,7 @@
-"""Two-Step QAOA の最小実装（blueqat SDK の GitHub 版 2.2.0 で回す）。
+"""Minimal implementation of Two-Step QAOA (run with blueqat SDK GitHub version 2.2.0).
 
-ビットの向き: blueqat の statevector は index = sum_i x_i 2^i（q0 が最下位）。
-QUBO は f(x) = x^T Q x（Q は対称、対角が一次の係数）で持つ。
+Bit order: blueqat statevector uses index = sum_i x_i 2^i (q0 is the least significant).
+The QUBO is held as f(x) = x^T Q x (Q symmetric, diagonal gives linear coefficients).
 """
 import itertools
 import math
@@ -13,9 +13,9 @@ from blueqat import Circuit
 BACKEND = 'statevector'
 
 
-# ---------------------------------------------------------------- 問題
+# ---------------------------------------------------------------- problem
 def bits_table(n):
-    """行 = 基底 index、列 = 量子ビット i の値 x_i。"""
+    """Row = basis index, column = value x_i of qubit i."""
     idx = np.arange(2 ** n)
     return ((idx[:, None] >> np.arange(n)[None, :]) & 1).astype(np.int8)
 
@@ -25,7 +25,7 @@ def qubo_values(Q, X):
 
 
 def to_ising(Q):
-    """x = (1 - z)/2 として x^T Q x = const + sum h_i z_i + sum_{i<j} J_ij z_i z_j。"""
+    """With x = (1 - z)/2, x^T Q x = const + sum h_i z_i + sum_{i<j} J_ij z_i z_j."""
     Q = np.asarray(Q, float)
     n = len(Q)
     S = (Q + Q.T) / 2
@@ -37,7 +37,7 @@ def to_ising(Q):
         h[i] -= S[i, i] / 2
     for i in range(n):
         for j in range(i + 1, n):
-            w = 2 * S[i, j]          # x_i x_j の係数
+            w = 2 * S[i, j]          # coefficient of x_i x_j
             const += w / 4
             h[i] -= w / 4
             h[j] -= w / 4
@@ -46,7 +46,7 @@ def to_ising(Q):
 
 
 def khot_penalty(n, groups, ks):
-    """sum_g (sum_{i in g} x_i - k_g)^2 の QUBO 行列（定数は捨てる）。"""
+    """QUBO matrix of sum_g (sum_{i in g} x_i - k_g)^2 (constant dropped)."""
     P = np.zeros((n, n))
     for g, k in zip(groups, ks):
         for i in g:
@@ -64,7 +64,7 @@ def feasible_mask(X, groups, ks):
     return m
 
 
-# ---------------------------------------------------------------- 回路の部品
+# ---------------------------------------------------------------- circuit components
 def add_cost(c, h, J, gamma):
     """exp(-i gamma H_ising)。rz(t)=exp(-i t Z/2), rzz(t)=exp(-i t ZZ/2)。"""
     for i, hi in enumerate(h):
@@ -92,7 +92,7 @@ def xy_pairs(group, kind):
         ring = [(g[a], g[(a + 1) % len(g)]) for a in range(len(g))]
         if len(g) == 2:
             ring = ring[:1]
-        # 偶・奇の順（parity ring）
+        # even/odd order (parity ring)
         return ring[0::2] + ring[1::2]
     raise ValueError(kind)
 
@@ -101,16 +101,16 @@ def check_disjoint(groups):
     seen = set()
     for g in groups:
         if seen & set(g):
-            raise ValueError('組が重なっている。組ごとの XY ミキサーは、重なる組の重みを保たない')
+            raise ValueError('groups overlap. The per-group XY mixer does not preserve the weight of overlapping groups')
         seen |= set(g)
 
 
 def add_xymixer(c, groups, beta, kind='ring', compiled=False):
-    """各組で exp(-i beta (XX+YY)/2) を、xy_pairs の順に掛けた積（XY 項の和の厳密な指数ではない。
-    隣り合う対は可換でないので、これは「順序つきの積」という ansatz）。
-    rxx(t)=exp(-i t XX/2), ryy(t)=exp(-i t YY/2) で、XX と YY は可換。
-    各因子は組 g の重みを保つ。重なりの無い組に限り、どの組の k-hot も厳密に保たれる。
-    compiled=True なら 1 対を CNOT 2 個で組む（xy_pair_2cx。同じユニタリであることは test_tsq で確認）。"""
+    """Product of exp(-i beta (XX+YY)/2) applied per group in the order of xy_pairs (not an exact exponential of the sum of XY terms.
+    Adjacent pairs do not commute, so this is an ansatz as an 'ordered product').
+    With rxx(t)=exp(-i t XX/2), ryy(t)=exp(-i t YY/2), XX and YY commute.
+    Each factor preserves the weight of group g. Only for non-overlapping groups is the k-hot property of every group exactly preserved.
+    If compiled=True, build each pair from 2 CNOTs (xy_pair_2cx; equivalence to the same unitary is checked in test_tsq)."""
     check_disjoint(groups)
     for g in groups:
         for i, j in xy_pairs(g, kind):
@@ -123,15 +123,15 @@ def add_xymixer(c, groups, beta, kind='ring', compiled=False):
 
 
 def xy_pair_2cx(c, beta, i, j):
-    """exp(-i beta (XX+YY)/2) を CNOT 2 個で。CNOT·(Rx⊗Rz)·CNOT = exp(-i(XX+ZZ)beta/2) を作り、
-    両方に Rx(π/2) を掛けて ZZ を YY に回す。"""
+    """exp(-i beta (XX+YY)/2) with 2 CNOTs. Build CNOT·(Rx⊗Rz)·CNOT = exp(-i(XX+ZZ)beta/2),
+    then apply Rx(π/2) to both to turn ZZ into YY."""
     h = math.pi / 2
     c.rx(h)[i].rx(h)[j].cx[i, j].rx(beta)[i].rz(beta)[j].cx[i, j].rx(-h)[i].rx(-h)[j]
     return c
 
 
 def dicke_vector(n, groups, ks):
-    """各組が Dicke 状態 D(|g|, k) の積（組に入らない量子ビットは |+>）。"""
+    """Product of Dicke states D(|g|, k) for each group (qubits not in any group are |+>)."""
     X = bits_table(n)
     amp = np.ones(2 ** n)
     covered = set()
@@ -145,7 +145,7 @@ def dicke_vector(n, groups, ks):
     return torch.tensor(amp, dtype=torch.complex128)
 
 
-# ---------------------------------------------------------------- 方式
+# ---------------------------------------------------------------- approach
 def run_state(n, build, initial=None):
     c = Circuit(n)
     build(c)
@@ -154,7 +154,7 @@ def run_state(n, build, initial=None):
 
 
 def state_penalty_qaoa(n, ising_total, params, p):
-    """素の QAOA: |+>^n、X ミキサー、H = C + lam P。params = [g1..gp, b1..bp]。"""
+    """Penalty QAOA: |+>^n, X mixer, H = C + lam P. params = [g1..gp, b1..bp]."""
     _, h, J = ising_total
 
     def build(c):
@@ -166,7 +166,7 @@ def state_penalty_qaoa(n, ising_total, params, p):
 
 
 def state_xy_dicke(n, groups, ks, ising_cost, params, p, kind='ring'):
-    """制約保存 QAOA（Hadfield 型）: 厳密な Dicke 積状態から、XY ミキサー、H = C。"""
+    """Constraint-preserving QAOA (Hadfield type): from an exact Dicke product state, XY mixer, H = C."""
     _, h, J = ising_cost
     covered = set(i for g in groups for i in g)
     free = [i for i in range(n) if i not in covered]
@@ -181,10 +181,10 @@ def state_xy_dicke(n, groups, ks, ising_cost, params, p, kind='ring'):
 
 
 def state_two_step(n, groups, ks, ising_pen, ising_cost, params, p1, p2, kind='ring'):
-    """Two-Step QAOA（v2 の式 (19)(20)）。
-    段1: |+>^n から X ミキサー、H_C1 = sum (sum x - k)^2 を p1 層。
-    段2: 段1 の出力から XY ミキサー、H_C2 = C を p2 層。
-    params = [g1(p1), b1(p1), g2(p2), b2(p2)]。"""
+    """Two-Step QAOA (v2 equations (19)(20)).
+    Stage 1: from |+>^n with X mixer, H_C1 = sum (sum x - k)^2 for p1 layers.
+    Stage 2: from the stage 1 output with XY mixer, H_C2 = C for p2 layers.
+    params = [g1(p1), b1(p1), g2(p2), b2(p2)]."""
     _, hp, Jp = ising_pen
     _, hc, Jc = ising_cost
     covered = set(i for g in groups for i in g)
@@ -204,16 +204,16 @@ def state_two_step(n, groups, ks, ising_pen, ising_cost, params, p1, p2, kind='r
     return run_state(n, build)
 
 
-# ---------------------------------------------------------------- 物差し
+# ---------------------------------------------------------------- metrics
 def metrics(probs, fvals, feas):
-    """1 標本 = 1 回の測定で得たビット列 1 本。
-    P_feas: 制約を満たす確率 / P_opt: 制約つき最適解の確率（事後選択しない、無条件の値）/
-    r_feas: 満たした標本の中で正規化したエネルギー (Cmax - <C>)/(Cmax - Cmin)、1 が最適・0 が最悪の可行解。
-            ⚠️ 掛け算の近似比ではない。事後選択の手間（1/P_feas 回）も入っていない。"""
+    """1 sample = 1 bitstring from 1 measurement.
+    P_feas: probability of satisfying constraints / P_opt: probability of the constrained optimum (no post-selection, unconditional value) /
+    r_feas: energy normalized among feasible samples (Cmax - <C>)/(Cmax - Cmin), 1 is the optimum and 0 is the worst feasible solution.
+            NOTE: This is not a multiplicative approximation ratio. It also does not include the cost of post-selection (1/P_feas trials)."""
     p = np.asarray(probs, float)
     fv = fvals[feas]
     cmin, cmax = fv.min(), fv.max()
-    opt = feas & (np.abs(fvals - cmin) <= 1e-9)   # 最適 = 制約つき最小値と 1e-9 以内（相対誤差では判定しない）
+    opt = feas & (np.abs(fvals - cmin) <= 1e-9)   # optimal = within 1e-9 of the constrained minimum (not judged by relative error)
     pf = p[feas].sum()
     r = np.nan
     if pf > 1e-12 and cmax > cmin:
@@ -222,7 +222,7 @@ def metrics(probs, fvals, feas):
 
 
 def optimize(loss_fn, n_params, restarts=8, iters=200, seed=0, lr=0.05, init_scale=0.5):
-    """Adam で何度か初期値を変えて最小化。最良の (loss, params) を返す。"""
+    """Minimize with Adam over several initial values. Return the best (loss, params)."""
     g = torch.Generator().manual_seed(seed)
     best = (math.inf, None)
     for _ in range(restarts):
@@ -241,11 +241,11 @@ def optimize(loss_fn, n_params, restarts=8, iters=200, seed=0, lr=0.05, init_sca
     return best
 
 
-# ---------------------------------------------------------------- 速い同等品（掃引用）
-# blueqat と同じ回路を、対角の位相掛け・1 量子ビット回転・XY の 2 準位回転で直接計算する。
-# 最適化はこちらで回し、得たパラメータを blueqat 版に通して一致を確かめる（verify_against_blueqat）。
+# ---------------------------------------------------------------- fast equivalent (for sweeping)
+# Compute the same circuit as blueqat directly via diagonal phase multiplication, 1-qubit rotations, and XY two-level rotations.
+# Run the optimization here, then pass the obtained parameters through the blueqat version to confirm they match (verify_against_blueqat).
 class Fast:
-    """⚠️ xymix は重なりの無い組だけを扱う（add_xymixer と同じ）。"""
+    """NOTE: xymix handles only non-overlapping groups (same as add_xymixer)."""
     def __init__(self, n):
         self.n = n
         self.X = bits_table(n)
@@ -268,20 +268,20 @@ class Fast:
         t = s.reshape((2,) * n)
         c, sn = torch.cos(beta), -1j * torch.sin(beta)
         for q in qubits:
-            ax = n - 1 - q             # reshape の軸 0 が q_{n-1}
+            ax = n - 1 - q             # axis 0 of reshape is q_{n-1}
             a0, a1 = t.select(ax, 0), t.select(ax, 1)
             t = torch.stack([c * a0 + sn * a1, sn * a0 + c * a1], dim=ax)
         return t.reshape(-1)
 
     def xymix(self, s, groups, beta, kind='ring'):
-        """exp(-i beta (XX+YY)/2) は |01>,|10> の間の回転 [[cos, -i sin],[-i sin, cos]]。"""
+        """exp(-i beta (XX+YY)/2) is a rotation between |01>,|10>: [[cos, -i sin],[-i sin, cos]]."""
         check_disjoint(groups)
         c, sn = torch.cos(beta), -1j * torch.sin(beta)
         for g in groups:
             for i, j in xy_pairs(g, kind):
                 xi, xj = self.X[:, i], self.X[:, j]
                 a = torch.as_tensor(np.where((xi == 1) & (xj == 0))[0])   # |..1_i 0_j..>
-                b = a + (1 << j) - (1 << i)                                # 対の |..0_i 1_j..>
+                b = a + (1 << j) - (1 << i)                                # pairwise |..0_i 1_j..>
                 sa, sb = s[a], s[b]
                 s = s.index_copy(0, a, c * sa + sn * sb).index_copy(0, b, sn * sa + c * sb)
         return s
@@ -311,7 +311,7 @@ def fast_two_step(F, groups, d_pen, d_cost, params, p1, p2, kind='ring'):
 
 
 def portfolio_instance(seed, n):
-    """実験2 の問題: 0.5 x^T S x - mu^T x、S = A A^T / n、mu ~ U(0,1)。"""
+    """Experiment 2 problem: 0.5 x^T S x - mu^T x, S = A A^T / n, mu ~ U(0,1)."""
     r = np.random.default_rng(1000 + seed)
     A = r.normal(size=(n, n))
     S = A @ A.T / n

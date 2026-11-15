@@ -1,8 +1,8 @@
-"""段1 を対称部分空間（基底 |D(n,w)>, w=0..n）で厳密に計算する。
+"""Exactly compute stage 1 in the symmetric subspace (basis |D(n,w)>, w=0..n).
 
-段1 は |+>^n・X ミキサー・(sum x - k)^2 だけで、どれも量子ビットの入れ替えに対して対称。
-よって状態は n+1 次元から出ない。sum_i X_i = 2 J_x、<w+1|J_x|w> = sqrt((w+1)(n-w))/2。
-2^n 次元の計算（tsq.Fast）との一致は test_sym.py で確かめる。
+Stage 1 consists only of |+>^n, the X mixer, and (sum x - k)^2, all of which are symmetric under qubit permutation.
+Thus the state stays within the n+1 dimensions. sum_i X_i = 2 J_x, <w+1|J_x|w> = sqrt((w+1)(n-w))/2.
+Agreement with the 2^n-dimensional computation (tsq.Fast) is checked in test_sym.py.
 """
 import math
 
@@ -20,7 +20,7 @@ class Sym:
         self.lam = torch.tensor(lam)
         self.V = torch.tensor(V, dtype=torch.complex128)
         self.w = torch.tensor(w, dtype=torch.float64)
-        # |+>^n の重み w 成分の振幅 sqrt(C(n,w) / 2^n)
+        # Amplitude of the weight-w component of |+>^n: sqrt(C(n,w) / 2^n)
         self.plus = torch.tensor([math.sqrt(math.comb(n, int(x)) / 2 ** n) for x in w], dtype=torch.complex128)
 
     def xmix(self, s, beta):
@@ -40,13 +40,13 @@ class Sym:
 
 
 def biased_product_Pk(n, k):
-    """各量子ビットを確率 k/n で 1 にした積状態（CNOT 0 個）の P_k。k 成分は厳密に Dicke。"""
+    """P_k of the product state with each qubit set to 1 with probability k/n (zero CNOTs). The k component is exactly Dicke."""
     q = k / n
     return math.comb(n, k) * q ** k * (1 - q) ** (n - k)
 
 
 def minimize(loss, x0, iters=300):
-    """L-BFGS-B（勾配は torch の自動微分）。評価した中で最も良かった点を返す（最後の点ではなく）。"""
+    """L-BFGS-B (gradients via torch autograd). Return the best point evaluated (not the last point)."""
     from scipy.optimize import minimize as _min
     best = [math.inf, x0.clone()]
 
@@ -62,7 +62,7 @@ def minimize(loss, x0, iters=300):
 
 
 def adam(loss, x0, iters=300, lr=0.05):
-    """Adam。途中で最も良かった点を返す。L-BFGS が狭い谷を外すときの補い。"""
+    """Adam. Return the best point along the way. A fallback for when L-BFGS misses a narrow valley."""
     x = x0.clone().requires_grad_(True)
     opt = torch.optim.Adam([x], lr=lr)
     best = [math.inf, x0.clone()]
@@ -77,8 +77,8 @@ def adam(loss, x0, iters=300, lr=0.05):
 
 
 def interp_table(n, k, pmax, restarts=128, iters=300, seed=0):
-    """INTERP 法: p1 の解から、層を 1 つ足した p1+1 の初期値を作る（Zhou ら 2020 の線形補間）。
-    それに加えて乱数の初期値も試し、最良を残す。返り値: [(p1, P_k, params), ...]。"""
+    """INTERP method: from the p1 solution, build an initial value for p1+1 with one extra layer (linear interpolation of Zhou et al. 2020).
+    In addition, also try random initial values and keep the best. Returns: [(p1, P_k, params), ...]."""
     S = Sym(n)
     g = torch.Generator().manual_seed(seed)
     out = []
@@ -93,11 +93,11 @@ def interp_table(n, k, pmax, restarts=128, iters=300, seed=0):
                 return np.array([(i / q) * (v[i - 1] if i - 1 >= 0 else 0) + ((q - i) / q) * (v[i] if i < q else 0)
                                  for i in range(q + 1)])
             cands.append(torch.tensor(np.concatenate([interp(gm), interp(bt)])))
-            # 前の解に 0 の層を足したもの（P_k は前と同じ = 下がらないことの保証）
+            # The previous solution with a zero layer appended (P_k same as before = guarantee of no degradation)
             cands.append(torch.cat([prev[:p1 - 1], torch.zeros(1, dtype=torch.float64),
                                     prev[p1 - 1:], torch.zeros(1, dtype=torch.float64)]))
         for _ in range(restarts):
-            # 周期の全範囲から取る: (w-k)^2 は整数なので γ の周期は 2π、β の周期は π
+            # Take from the full period range: (w-k)^2 is an integer, so the period of gamma is 2pi and that of beta is pi
             u = torch.rand(2 * p1, generator=g, dtype=torch.float64) * 2 - 1
             cands.append(torch.cat([u[:p1] * math.pi, u[p1:] * math.pi / 2]))
         best = (math.inf, None)
@@ -105,7 +105,7 @@ def interp_table(n, k, pmax, restarts=128, iters=300, seed=0):
             r = minimize(loss, x0, iters)
             if r[0] < best[0]:
                 best = r
-            if i < 16:                     # 先頭 16 個（補間・0 足し・乱数）は Adam → L-BFGS でも試す
+            if i < 16:                     # For the first 16 (interpolation, zero-padding, random), also try Adam -> L-BFGS
                 a = adam(loss, x0, iters)
                 r = minimize(loss, a[1], iters)
                 if r[0] < best[0]:

@@ -25,8 +25,6 @@ followed by post-selection on the hardened constraints.
 | `results/` | raw results (JSON) behind every number in the paper; `results/s2/` holds the stage-1 angle tables |
 | `paper/` | LaTeX source and PDF of v3 |
 
-Comments and docstrings in the code are in Japanese.
-
 ## Running
 
 Requirements: Python 3.10+, `torch` (CPU is enough), `numpy`, `scipy`, `networkx`, `matplotlib`,

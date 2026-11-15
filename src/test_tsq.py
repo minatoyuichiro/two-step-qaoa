@@ -1,4 +1,4 @@
-"""tsq.py の部品を、numpy の密行列（expm）と突き合わせる。"""
+"""Cross-check the components of tsq.py against numpy dense matrices (expm)."""
 import numpy as np
 import torch
 from scipy.linalg import expm
@@ -9,7 +9,7 @@ I2 = np.eye(2); X = np.array([[0, 1], [1, 0]]); Y = np.array([[0, -1j], [1j, 0]]
 
 
 def op(n, d):
-    """d = {qubit: 2x2}。index = sum x_i 2^i なので、クロネッカー積は q_{n-1} から並べる。"""
+    """d = {qubit: 2x2}. index = sum x_i 2^i, so order the Kronecker product starting from q_{n-1}."""
     m = np.array([[1]])
     for q in reversed(range(n)):
         m = np.kron(m, d.get(q, I2))
@@ -59,7 +59,7 @@ def test_xy_pair_and_weight():
     e0 = np.zeros(2 ** n); e0[1] = 1
     ref = expm(-1j * 0.6 * Hxy) @ e0
     assert abs(abs(np.vdot(ref, st)) - 1) < 1e-10
-    # 重み保存: Dicke から XY を掛けても重み 2 の外に漏れない
+    # Weight preservation: multiplying XY into Dicke does not leak outside weight 2
     groups = [(0, 1, 2, 3)]
     for kind in ('ring', 'complete'):
         s = tsq.run_state(n, lambda c: tsq.add_xymixer(c, groups, 0.9, kind),
@@ -69,7 +69,7 @@ def test_xy_pair_and_weight():
 
 
 def test_xy_pair_2cx():
-    """CNOT 2 個の XY が rxx·ryy と同じユニタリ（大域位相を除く）。"""
+    """The XY of 2 CNOTs equals rxx·ryy as a unitary (up to global phase)."""
     for t in (0.3, -1.1, 2.4):
         cols_a, cols_b = [], []
         for b in range(4):
