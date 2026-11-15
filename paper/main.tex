@@ -1,0 +1,144 @@
+\documentclass{article}
+
+\usepackage{PRIMEarxiv}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{nicefrac}
+\usepackage{microtype}
+\usepackage{amsmath}
+\usepackage{fancyhdr}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\graphicspath{{figs/}{./}}
+
+\pagestyle{fancy}
+\thispagestyle{empty}
+\rhead{ \textit{ }}
+\fancyhead[LO]{Two-Step QAOA}
+
+\title{Two-Step QAOA: Enhancing Quantum Optimization by Decomposing K-hot Constraints in QUBO Formulations}
+
+\author{
+  Yuichiro Minato \\
+  blueqat Inc. \\
+  Shibuya2-24-12, Shibuya \\
+  Tokyo, Japan\\
+  \texttt{minato@blueqat.com} \\
+}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Penalty-based QUBO formulations force the user of the Quantum Approximate Optimization Algorithm (QAOA) to choose a penalty weight: too large and the cost differences between feasible solutions become small compared with the scale the circuit angles are tuned to, too small and the constraint is violated.
+Two-Step QAOA removes this choice for k-hot constraints $\sum_{i\in g}x_i=k$.
+A first QAOA stage, driven only by the penalty $(\sum_{i\in g}x_i-k)^2$ and the transverse-field mixer, prepares the initial state; a second stage optimizes the cost alone with a constraint-preserving XY mixer.
+We show that (i) stage 2 cannot change the probability of satisfying the hardened constraints, which is therefore fixed by stage 1 and enforced exactly by post-selection;
+(ii) for each group the constraint-satisfying component of the stage-1 state is exactly a Dicke state, so stage 1 is a Dicke-state preparation up to a leakage amplitude, and Two-Step QAOA has, as a function of the stage-2 angles, the same post-selected landscape as the Dicke-initialized alternating-operator ansatz;
+(iii) the stage-1 angles depend only on the group size and $k$, not on the problem, and can be tabulated once; for half filling, three layers reach a k-hot probability of at least $0.994$ for all tested sizes up to 32 qubits per group.
+We present the method as a compilation pass that takes the constraints as they are already written in penalty form.
+In state-vector simulations of cardinality-constrained portfolios (60 instances, up to 12 qubits), Two-Step QAOA with a complete-graph XY mixer reaches the optimum more often than penalty QAOA under every penalty-selection rule we tested, at every depth up to five and at the same training budget (median paired ratios $2.9$--$288$ against deployable rules, and $2.2$--$9.7$ at depth $\ge3$ against an oracle-tuned weight given five times the budget); with the cheaper ring mixer the advantage holds at shallow depth but a small penalty weight catches up at depth three to five for half filling.
+For graph coloring, where all constraints can be hardened, it finds an optimum with probability $0.93$ at 15 qubits, against $0.13$ for penalty QAOA and $0.12$ for uniform sampling.
+For permutation constraints only the rows can be hardened; this raises feasibility and beats penalty QAOA, but stays on par with uniform sampling of permutations for QAP and TSP.
+\end{abstract}
+
+\section{Introduction}
+\label{sec:intro}
+The Quantum Approximate Optimization Algorithm (QAOA)~\cite{farhi2014quantumapproximateoptimizationalgorithm} and its generalization, the Quantum Alternating Operator Ansatz~\cite{Hadfield_2019}, are the standard gate-based approaches to combinatorial optimization on near-term devices.
+Most applications~\cite{Suksmono_2022,niroula2022constrained,Tabi_2020} start from a QUBO~\cite{lucas2014ising} in which constraints appear as penalty terms $A(\cdot)^2$.
+The penalty weight $A$ must be chosen per problem: a weight large enough to guarantee feasibility of the QUBO minimum compresses the cost differences that QAOA has to resolve, while a small weight lets the optimizer trade violations for cost.
+In practice the weight is searched, e.g.\ by starting small and doubling it whenever the returned answer is infeasible, and each step of the search costs a full training run.
+
+For one-hot and, more generally, k-hot constraints, the alternating-operator ansatz offers a way out: an XY mixer preserves the Hamming weight of a group, so the constraint becomes hard, provided the circuit starts in the feasible subspace~\cite{Hadfield_2019,wang2020xy}.
+The usual starting point is a Dicke state, prepared by a dedicated circuit~\cite{B_rtschi_2019,baertschi2022short}.
+
+The first version of this work proposed to prepare that starting point with QAOA itself: a first stage driven by the penalty term only, followed by an XY-mixer stage driven by the cost only. This replaces the penalty weight and the Dicke circuit by a second QAOA run. The earlier versions described the idea without analysis or numerical evidence.
+This version adds both, and corrects several statements of the earlier versions. Our contributions are:
+\begin{enumerate}
+\item \textbf{Exact properties} (Sec.~\ref{sec:theory}): stage 2 conserves the probability of satisfying the hardened constraints; the feasible component of the stage-1 state is exactly a (product of) Dicke state(s); Two-Step QAOA and the Dicke-initialized ansatz have the same post-selected landscape; and the k-hot structure of a penalty is not identifiable from a QUBO matrix alone.
+\item \textbf{A compilation pass} (Sec.~\ref{sec:software}): the constraints are taken as written in penalty form, stage 1 is looked up in a problem-independent table computed in the symmetric subspace, and no penalty weight is searched for the hardened constraints.
+\item \textbf{Numerical evidence} (Sec.~\ref{sec:results}), including deployable penalty-search baselines, uniform feasible sampling, and the cases where the method does not help.
+\end{enumerate}
+
+\section{Background}
+\label{sec:background}
+
+\subsection{QAOA and the alternating operator ansatz}
+For a cost Hamiltonian $H_C$ diagonal in the computational basis, a depth-$p$ QAOA state is
+\begin{equation}
+|\boldsymbol\gamma,\boldsymbol\beta\rangle=\prod_{l=1}^{p} e^{-i\beta_l H_M}e^{-i\gamma_l H_C}\,|\psi_0\rangle ,
+\end{equation}
+with layer-wise angles $(\gamma_l,\beta_l)$ chosen by a classical optimizer to minimize $\langle H_C\rangle$.
+Standard QAOA uses $H_M=\sum_iX_i$ and $|\psi_0\rangle=|+\rangle^{\otimes n}$.
+In the alternating-operator ansatz~\cite{Hadfield_2019} the mixer is chosen to preserve a feasible subspace; for a k-hot group the XY mixer, built from $(X_iX_j+Y_iY_j)/2$ terms on pairs inside the group, preserves the group weight $W_g=\sum_{i\in g}x_i$~\cite{wang2020xy}.
+The initial state must then lie in the feasible subspace; it need not be an eigenstate of the mixer.
+A natural choice is the Dicke state $|D(n,k)\rangle=\binom{n}{k}^{-1/2}\sum_{|x|=k}|x\rangle$, the uniform superposition of all distinct weight-$k$ strings.
+It is an eigenstate of the complete-graph XY Hamiltonian, and of the ring XY Hamiltonian only for $k\in\{0,1,n-1,n\}$; the ordered gate products used in circuits (Eq.~\eqref{eq:xyproduct}) need not have it as an eigenstate.
+
+\subsection{Penalty formulation}
+A QUBO with k-hot constraints reads
+\begin{equation}
+H=C(x)+\sum_{g}A_g\Big(\sum_{i\in g}x_i-k_g\Big)^2 ,
+\end{equation}
+where a penalty contributes the coupling $2A_g$ to every pair inside $g$ and $A_g(1-2k_g)$ to every linear term.
+The weight must be large enough to make violations unattractive, but every unit of $A_g$ shrinks the relative size of the cost differences in $H$.
+
+\section{Two-Step QAOA}
+\label{sec:method}
+Let $\mathcal G$ be a set of pairwise-disjoint k-hot groups chosen for hardening.
+\textbf{Stage 1} starts from $|+\rangle^{\otimes n}$ and applies, on each group $g$ independently, $p_1^{(g)}$ layers of
+\begin{equation}
+e^{-i\beta^{(1,g)}_l\sum_{i\in g}X_i}\,e^{-i\gamma^{(1,g)}_l (W_g-k_g)^2},
+\end{equation}
+i.e.\ QAOA on the penalty alone, with no weight to choose. Because the groups are disjoint these circuits commute; a single QAOA on $H_{C_1}=\sum_g(W_g-k_g)^2$ with shared angles is the special case of equal angles and depths.
+\textbf{Stage 2} starts from the stage-1 output $|\psi_1\rangle$ and applies $p_2$ layers of
+\begin{equation}
+U_{XY}(\beta^{(2)}_l)\,e^{-i\gamma^{(2)}_l H_{C_2}},
+\end{equation}
+where $H_{C_2}$ is the original QUBO with the penalties of the hardened groups removed (penalties of constraints that are not hardened remain), and $U_{XY}$ is the XY mixer of Eq.~\eqref{eq:xyproduct} on the hardened groups (with the $X$ mixer on the remaining qubits). We use two edge sets inside a group: the parity-ordered ring ($|g|$ pairs per layer) and the complete graph ($|g|(|g|-1)/2$ pairs in lexicographic order, the same number of two-qubit terms as a dense cost layer); within a layer the pair rotations are applied in the listed order.
+All angles are layer-wise.
+The output is measured and samples violating a hardened constraint are discarded.
+In the first version the angles of both stages were to be optimized together; we instead fix stage 1 from a table and train stage 2 on the post-selected expectation of $H_{C_2}$, which Sec.~\ref{sec:theory} shows to be the natural objective.
+
+\input{sec_theory}
+
+\input{sec_software}
+
+\subsection{Detecting k-hot penalties in a QUBO matrix}
+\label{sec:detect}
+When only a penalized QUBO matrix is available, we suggest constraints as follows.
+(i) Group the positive couplings by value (relative tolerance $10^{-6}$) and keep only values above the largest relative gap of the sorted couplings (penalties are normally chosen larger than the cost).
+(ii) For each value, the maximal cliques of the graph of pairs with that coupling are candidate supports with $A=v/2$; in addition, the maximal cliques of the graph of all couplings above the gap are candidates with $A$ equal to half their median coupling (for costs that perturb the penalty couplings); duplicate supports are merged.
+(iii) The integers $k_g$ are obtained by a joint least-squares fit of the linear terms, $\ell_i\approx\sum_{g\ni i}A_g(1-2k_g)$, and a candidate is accepted if the fitted $k_g$ is within $0.05$ of an integer in $[1,|g|-1]$.
+Enumerating maximal cliques is exponential in the worst case, but the graphs of equal penalty couplings consist of small, mostly disjoint cliques (one per constraint), so the enumeration took at most a few seconds on our largest instances (189 variables). By the Remark in Sec.~\ref{sec:theory} the result is a suggestion, not a deduction.
+
+\section{Numerical experiments}
+\label{sec:results}
+\input{sec_results}
+
+\section{Discussion}
+\label{sec:discussion}
+\input{sec_discussion}
+
+\section{Conclusion}
+Two-Step QAOA turns the k-hot penalties a user already writes into hard constraints, without a penalty weight and without a dedicated Dicke-state circuit.
+Its stage 1 is an exact Dicke-state preparation up to leakage, with problem-independent angles that can be shipped as a table, and its stage 2 has the landscape of the Dicke-initialized alternating-operator ansatz.
+In our simulations of portfolio problems this removes the penalty search and, with a complete-graph XY mixer, gives a higher median success probability than every penalty-selection rule we tested at every depth up to five; with the ring mixer the advantage is limited to shallow depth. For graph coloring, where all constraints are hardened (ring mixer, compared with the formulation library's penalty ladder and uniform sampling), it finds optimal colorings far more often. For permutation constraints, where only part of the constraints can be hardened, it improves on penalty QAOA but not clearly on uniform sampling, and permutation-preserving mixers are the natural next step.
+
+\section*{Code and data availability}
+The simulations use the blueqat SDK (GitHub version 2.2.0) for circuit construction and verification. The scripts, the tables of stage-1 angles and the raw results behind all numbers in this paper are available at \url{https://github.com/minatoyuichiro/two-step-qaoa}. The detection and multi-group experiments additionally use an in-house library of QUBO formulations that is not public; their raw results are included in the repository.
+
+\section*{Acknowledgments}
+I would like to express my gratitude to Takao Tomono from Keio University and independent researcher Shunsuke Sotobayashi for their invaluable contributions and support.
+
+\bibliographystyle{unsrt}
+\bibliography{references}
+
+\end{document}

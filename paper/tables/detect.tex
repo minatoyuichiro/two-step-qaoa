@@ -1,0 +1,34 @@
+\begin{table}[t]\centering\small
+\caption{Detecting k-hot penalties from QUBO matrices of 168 instances of 29 formulations. Truth: the constraints passed to the penalty builders. Final detections are counted correct only if both the support and $k$ match. Totals: 1179 constraints, 562 detections, 487 correct (precision 0.87, recall 0.41); candidate supports before the $k$ fit: 20541, of which 983 match a true support.}
+\label{tab:detect}
+\begin{tabular}{lrrrr}\toprule
+formulation & constraints & detections & correct & wrong\\\midrule
+assignment & 72 & 71 & 71 & 0\\
+bin-packing & 51 & 0 & 0 & 0\\
+clique & 0 & 14 & 0 & 14\\
+clustering & 60 & 44 & 44 & 0\\
+coloring & 51 & 51 & 51 & 0\\
+community & 60 & 60 & 60 & 0\\
+facility & 42 & 0 & 0 & 0\\
+feature-selection & 6 & 0 & 0 & 0\\
+flowshop & 48 & 42 & 42 & 0\\
+graph-partition & 6 & 2 & 0 & 2\\
+jobshop & 46 & 42 & 42 & 0\\
+knapsack & 0 & 2 & 0 & 2\\
+maxcut & 0 & 15 & 0 & 15\\
+maze & 0 & 7 & 0 & 7\\
+mis & 0 & 5 & 0 & 5\\
+number-partition & 0 & 7 & 0 & 7\\
+portfolio & 6 & 0 & 0 & 0\\
+portfolio-constrained & 6 & 0 & 0 & 0\\
+production & 30 & 0 & 0 & 0\\
+qap & 60 & 60 & 60 & 0\\
+qubo & 0 & 1 & 0 & 1\\
+set-cover & 0 & 3 & 0 & 3\\
+shift & 336 & 0 & 0 & 0\\
+sudoku & 71 & 8 & 3 & 5\\
+timetable & 30 & 24 & 24 & 0\\
+tsp & 90 & 90 & 90 & 0\\
+vertex-cover & 0 & 8 & 0 & 8\\
+vrp & 108 & 6 & 0 & 6\\
+\bottomrule\end{tabular}\end{table}

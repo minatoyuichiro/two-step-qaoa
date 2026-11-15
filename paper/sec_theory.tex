@@ -1,0 +1,79 @@
+% v3 で新しく足す節: Two-Step QAOA の性質（下書き 2026-10-07）
+\section{Properties of the Two-Step Construction}
+\label{sec:theory}
+
+Throughout, $\mathcal{G}=\{g_1,\dots,g_m\}$ denotes the k-hot constraints selected for hardening,
+$\sum_{i\in g}x_i=k_g$, and we assume the groups are pairwise disjoint.
+Let $W_g=\sum_{i\in g}x_i$ (diagonal in the computational basis) and let
+$\Pi=\prod_{g}\Pi_g$, with $\Pi_g$ the projector onto $W_g=k_g$, be the projector onto the
+hard-feasible subspace. Stage~1 uses the initial state $|+\rangle^{\otimes n}$, the transverse-field
+mixer $B=\sum_i X_i$ and the cost $H_{C_1}=\sum_{g}(W_g-k_g)^2$; stage~2 uses the cost
+$H_{C_2}$ (the original QUBO with the penalties of the hardened groups removed) and the mixer
+\begin{equation}
+U_{XY}(\beta)=\prod_{g\in\mathcal{G}}\ \prod_{(i,j)\in E_g} e^{-i\beta (X_iX_j+Y_iY_j)/2}
+\label{eq:xyproduct}
+\end{equation}
+for a fixed ordered edge list $E_g$ inside each group (the parity-ordered ring or the complete graph in lexicographic order),
+together with $e^{-i\beta X_i}$ on qubits that belong to no hardened group.
+Equation~\eqref{eq:xyproduct} is an ordered product, not the exponential of the summed XY Hamiltonian;
+everything below holds for either choice.
+
+\paragraph{Proposition 1 (stage 2 conserves hard feasibility).}
+Every factor of stage~2 commutes with $\Pi$. Hence for any stage-2 depth $p_2$ and any angles,
+the probability that the output satisfies all \emph{hardened} constraints is fixed by stage~1,
+\begin{equation}
+P_{\mathrm{hard}}(\text{final}) = \langle\psi_1|\Pi|\psi_1\rangle \equiv P_{\mathcal{G}} ,
+\end{equation}
+where $|\psi_1\rangle$ is the stage-1 output. Constraints that are not hardened (kept as penalties in $H_{C_2}$) are not covered: their satisfaction
+probability does depend on the stage-2 angles.
+\emph{Proof.} $\Pi$ is diagonal in the computational basis, so it commutes with every diagonal operator, in particular with $H_{C_2}$ (whatever penalties of non-hardened constraints it contains). $X_iX_j+Y_iY_j=2(\sigma^+_i\sigma^-_j+\sigma^-_i\sigma^+_j)$ with $i,j\in g$
+preserves $W_g$ and does not act on other groups; single-qubit $X$ acts only outside all hardened groups.
+\qed
+
+Consequently stage~2 can neither repair nor create violations of the hardened constraints: the infeasible
+component produced by stage~1 propagates to the output. A hard-constraint guarantee therefore
+requires either $P_{\mathcal{G}}=1$ or post-selection on $\Pi$ (discarding violating samples),
+which costs $1/P_{\mathcal{G}}$ shots per kept sample. Disjointness is essential: an XY term on a pair
+that straddles two overlapping groups changes both group weights.
+
+\paragraph{Proposition 2 (exact Dicke component).}
+For a single group ($m=1$, $g=\{1..n\}$, weight $k$), stage~1 is invariant under all qubit permutations,
+so $|\psi_1\rangle$ lies in the $(n+1)$-dimensional symmetric subspace spanned by Dicke states and
+\begin{equation}
+\Pi_k|\psi_1\rangle = a_k\,|D(n,k)\rangle,\qquad |a_k|^2=P_k .
+\end{equation}
+For disjoint groups stage~1 acts on each group separately, so $|\psi_1\rangle=\bigotimes_g|\psi_1^{(g)}\rangle\otimes|+\rangle^{\otimes n_{\mathrm{free}}}$
+and $\Pi|\psi_1\rangle\propto\bigotimes_g|D(|g|,k_g)\rangle\otimes|+\rangle^{\otimes n_{\mathrm{free}}}$,
+with $P_{\mathcal{G}}=\prod_g P_{k_g}^{(g)}$. A per-group target $P^{(g)}\ge 1-\epsilon$ only gives
+$P_{\mathcal G}\ge(1-\epsilon)^m$, so a global leakage budget has to be divided among the $m$ groups.
+
+Thus stage~1 is an exact Dicke-state preparation up to a leakage amplitude, not an approximation
+of it: the post-selected stage-1 state \emph{is} the Dicke state. Its only figure of merit is $P_k$,
+which depends on $(n,k,p_1)$ and the stage-1 angles but \emph{not on the problem}. The stage-1 angles
+can therefore be tabulated once and shipped with the software (Sec.~\ref{sec:software}). Because the
+dynamics stays in the symmetric subspace, the table is computed with $(n+1)$-dimensional matrices,
+for $n$ far beyond what state-vector simulation of the full circuit allows.
+
+\paragraph{Corollary (relation to the Dicke-initialised alternating-operator ansatz).}
+Let $\Pi_{\mathrm{opt}}$ project onto the optima of the original problem (all constraints satisfied),
+so that $\Pi_{\mathrm{opt}}\le\Pi$, and assume $P_{\mathcal G}>0$.
+Let $P^{\mathrm{Dicke}}_{\mathrm{opt}}(\boldsymbol\gamma_2,\boldsymbol\beta_2)$ be the probability of sampling an optimum
+when stage~2 is started from the exact product of Dicke states. Then, for the same stage-2 angles,
+\begin{equation}
+P^{\mathrm{two\text{-}step}}_{\mathrm{opt}} = P_{\mathcal{G}}\;P^{\mathrm{Dicke}}_{\mathrm{opt}},
+\end{equation}
+and the post-selected expectation of $H_{C_2}$ coincides with the Dicke-initialised one, so both
+optimisations have the same landscape. Two-Step QAOA and the Dicke-initialised ansatz differ only
+in (i) how the initial state is prepared and (ii) the leakage $1-P_{\mathcal{G}}$.
+
+\paragraph{Remark (what a QUBO matrix does and does not reveal).}
+A penalty $A(W_g-k)^2$ contributes the same coupling $2A$ to every pair inside $g$ and $A(1-2k)$ to each
+linear term. The support $g$ and the weight $A$ can often be recognised from the matrix, but $k$ cannot:
+\begin{equation}
+A(W_g-k)^2 = A(W_g-k')^2 + 2A(k'-k)\,W_g + A(k^2-k'^2),
+\end{equation}
+so any uniform linear cost on $g$ can be traded for a change of $k$. More generally, an unknown quadratic
+cost can absorb changes of the support and of $A$ as well, so no part of the decomposition
+``cost $+$ penalties'' is identifiable from the matrix without assumptions on the cost. In software, the constraints
+should therefore be passed explicitly (as the formulation code already knows them), and matrix-based
+detection used only as a suggestion whose whole decomposition (support, $k$ and $A$) is confirmed by the user (Sec.~\ref{sec:detect}).

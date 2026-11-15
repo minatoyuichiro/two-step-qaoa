@@ -1,0 +1,39 @@
+% v3 で新しく足す節: ソフトウェアとしての手順（下書き 2026-10-07。数値は実験の完了後に入れる）
+\section{Two-Step QAOA as a Compilation Pass}
+\label{sec:software}
+
+The construction of Sec.~\ref{sec:theory} needs nothing beyond what a user already writes for a
+penalty-based QUBO. We therefore present Two-Step QAOA as a compilation pass that turns a
+standard penalty formulation into a constraint-preserving circuit without any penalty tuning
+for the hardened constraints.
+
+\paragraph{Input.} A cost QUBO $C(x)$ and a list of equality constraints $\sum_{i\in g}x_i=k_g$,
+exactly as passed to a penalty builder such as \texttt{add\_onehot} / \texttt{add\_sum\_eq}.
+If only a penalised QUBO matrix is available, the supports $g$ and weights $A_g$ can be suggested
+by the detector of Sec.~\ref{sec:detect}, but the whole proposed decomposition (supports, $k_g$ and $A_g$) must be confirmed by the user (Remark in Sec.~\ref{sec:theory}).
+
+\paragraph{Pass.} (The experiments of Sec.~\ref{sec:results} implement steps 2--4 for the groups chosen by the
+formulation code; the greedy selection of step 1 is implemented in the detector but was not used in the experiments.)
+\begin{enumerate}
+\item \emph{Select hard groups.} Choose a pairwise-disjoint subset $\mathcal G$ of the constraints
+  (we take groups greedily in order of decreasing number of qubits). Overlapping constraints that are not selected
+  (e.g.\ the columns of an assignment matrix when its rows are hardened) stay in the cost as penalties.
+\item \emph{Stage 1 from a table.} For each $g\in\mathcal G$ look up stage-1 angles for $(|g|,k_g)$
+  in a precomputed table (Table~\ref{tab:stage1}); no per-problem optimisation is performed.
+  Groups are independent, so different groups may use different depths and angles.
+\item \emph{Stage 2.} Build the cost layer from $C$ plus the penalties of the non-hardened constraints,
+  and the XY mixer of Eq.~\eqref{eq:xyproduct} on the hardened groups ($X$ mixer elsewhere).
+  Train the stage-2 angles on the expectation post-selected on $\Pi$.
+\item \emph{Sample and post-select.} Discard samples that violate a hardened constraint; return the best
+  remaining sample. By Proposition~1 the returned answer always satisfies the hardened constraints.
+\end{enumerate}
+
+\paragraph{What the user no longer does.} (i) Choose or search a penalty weight for the hardened
+constraints; (ii) design a Dicke-state circuit; (iii) optimise stage-1 parameters per problem.
+What remains: a penalty weight for constraints that cannot be hardened (overlapping or inequality
+constraints), and the usual stage-2 training.
+
+\paragraph{The stage-1 table.} Because stage~1 stays in the symmetric subspace, the table is computed
+with $(n+1)$-dimensional matrices. We optimise layer by layer (each depth is initialised from the
+previous solution by interpolation and by appending a zero layer, plus random starts over the full
+periods $\gamma\in[-\pi,\pi]$, $\beta\in[-\pi/2,\pi/2]$), so the tabulated $P_k$ never decreases with depth.

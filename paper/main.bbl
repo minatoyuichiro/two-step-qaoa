@@ -1,0 +1,63 @@
+\begin{thebibliography}{10}
+
+\bibitem{farhi2014quantumapproximateoptimizationalgorithm}
+Edward Farhi, Jeffrey Goldstone, and Sam Gutmann.
+\newblock A quantum approximate optimization algorithm, 2014.
+
+\bibitem{Hadfield_2019}
+Stuart Hadfield, Zhihui Wang, Bryan O’Gorman, Eleanor~G. Rieffel, Davide
+  Venturelli, and Rupak Biswas.
+\newblock From the quantum approximate optimization algorithm to a quantum
+  alternating operator ansatz.
+\newblock {\em Algorithms}, 12(2):34, February 2019.
+
+\bibitem{Suksmono_2022}
+A.~B. Suksmono and Y.~Minato.
+\newblock Quantum computing formulation of some classical hadamard matrix
+  searching methods and its implementation on a quantum computer.
+\newblock {\em Scientific Reports}, 12(197), 2022.
+
+\bibitem{niroula2022constrained}
+Pradeep Niroula, Ruslan Shaydulin, Romina Yalovetzky, et~al.
+\newblock Constrained quantum optimization for extractive summarization on a
+  trapped-ion quantum computer.
+\newblock {\em Scientific Reports}, 12(1):17171, 2022.
+
+\bibitem{Tabi_2020}
+Zsolt Tabi, Kareem~H. El-Safty, Zsofia Kallus, Peter Haga, Tamas Kozsik, Adam
+  Glos, and Zoltan Zimboras.
+\newblock Quantum optimization for the graph coloring problem with
+  space-efficient embedding.
+\newblock In {\em 2020 IEEE International Conference on Quantum Computing and
+  Engineering (QCE)}. IEEE, October 2020.
+
+\bibitem{lucas2014ising}
+Andrew Lucas.
+\newblock Ising formulations of many {NP} problems.
+\newblock {\em Frontiers in Physics}, 2:5, 2014.
+
+\bibitem{wang2020xy}
+Zhihui Wang, Nicholas~C. Rubin, Jason~M. Dominy, and Eleanor~G. Rieffel.
+\newblock {XY}-mixers: Analytical and numerical results for the quantum
+  alternating operator ansatz.
+\newblock {\em Physical Review A}, 101:012320, 2020.
+
+\bibitem{B_rtschi_2019}
+Andreas Bärtschi and Stephan Eidenbenz.
+\newblock Deterministic preparation of dicke states.
+\newblock In {\em Fundamentals of Computation Theory (FCT 2019)}, pages
+  126--139. Springer International Publishing, 2019.
+
+\bibitem{baertschi2022short}
+Andreas B{\"a}rtschi and Stephan Eidenbenz.
+\newblock Short-depth circuits for {Dicke} state preparation.
+\newblock In {\em 2022 IEEE International Conference on Quantum Computing and
+  Engineering (QCE)}, 2022.
+
+\bibitem{zhou2020qaoa}
+Leo Zhou, Sheng-Tao Wang, Soonwon Choi, Hannes Pichler, and Mikhail~D. Lukin.
+\newblock Quantum approximate optimization algorithm: Performance, mechanism,
+  and implementation on near-term devices.
+\newblock {\em Physical Review X}, 10:021067, 2020.
+
+\end{thebibliography}

@@ -1,0 +1,25 @@
+\begin{table}[t]\centering\small
+\caption{Problems with several one-hot groups (mean over instances, depth $p=5$, ring XY mixer). ``Hard'' rows: the one-hot groups chosen by the formulation code are hardened with XY mixers; for coloring these are all constraints, for the permutation problems only the rows (columns remain penalties). $P_{\rm opt|feas}$ is the optimum probability among feasible samples. Penalty weights follow the formulation code's ladder.}
+\label{tab:multi}
+\begin{tabular}{lrrlccc}\toprule
+problem & qubits & inst. & method & $P_{\rm feas}$ & $P_{\rm opt}$ & $P_{\rm opt|feas}$\\\midrule
+assignment 4 & 16 & 5 & uniform feasible & 1.000 & 0.0417 & 0.0417\\
+assignment 4 & 16 & 5 & penalty QAOA & 0.063 & 0.0055 & 0.0885\\
+assignment 4 & 16 & 5 & Two-Step (rows hard) & 0.614 & 0.1140 & 0.1850\\
+\midrule
+graph 3-coloring (dense) 4 & 12 & 10 & uniform feasible & 1.000 & 0.3111 & 0.3111\\
+graph 3-coloring (dense) 4 & 12 & 10 & penalty QAOA & 0.972 & 0.4043 & 0.4174\\
+graph 3-coloring (dense) 4 & 12 & 10 & Two-Step (all hard) & 1.000 & 0.9861 & 0.9861\\
+\midrule
+graph 3-coloring (dense) 5 & 15 & 10 & uniform feasible & 1.000 & 0.1185 & 0.1185\\
+graph 3-coloring (dense) 5 & 15 & 10 & penalty QAOA & 0.788 & 0.1290 & 0.1761\\
+graph 3-coloring (dense) 5 & 15 & 10 & Two-Step (all hard) & 1.000 & 0.9302 & 0.9302\\
+\midrule
+QAP 4 & 16 & 5 & uniform feasible & 1.000 & 0.0583 & 0.0583\\
+QAP 4 & 16 & 5 & penalty QAOA & 0.057 & 0.0044 & 0.0800\\
+QAP 4 & 16 & 5 & Two-Step (rows hard) & 0.780 & 0.0633 & 0.0822\\
+\midrule
+TSP 4 & 16 & 5 & uniform feasible & 1.000 & 0.3333 & 0.3333\\
+TSP 4 & 16 & 5 & penalty QAOA & 0.025 & 0.0096 & 0.3876\\
+TSP 4 & 16 & 5 & Two-Step (rows hard) & 0.848 & 0.3298 & 0.3890\\
+\bottomrule\end{tabular}\end{table}

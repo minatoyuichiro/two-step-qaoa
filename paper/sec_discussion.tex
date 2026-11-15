@@ -1,0 +1,43 @@
+% 考察（2026-10-15）
+\paragraph{What is gained, and from where.}
+The improvement over penalty QAOA in Sec.~\ref{sec:results} does not come from a better circuit in a narrow sense:
+by the Corollary of Sec.~\ref{sec:theory}, Two-Step QAOA has exactly the post-selected landscape of the Dicke-initialized
+alternating-operator ansatz, and indeed matches it up to the factor $P_{\mathcal G}$ whenever training reaches the same angles. What Two-Step QAOA adds is a way to obtain that
+ansatz from the penalty formulation the user already has, with no penalty weight to search and no state-preparation
+circuit to design. The comparison that matters for a user is therefore against penalty QAOA \emph{with a realistic way of
+choosing the weight}, which is what our baselines implement.
+
+\paragraph{Penalty QAOA can be competitive if the weight is known.}
+When the weight is chosen with oracle knowledge (the exact optimum, used to pick the best of five weights) and five times
+the training budget is spent, penalty QAOA overtakes ring-mixer Two-Step at larger depth for half filling, and a ladder started
+from a small weight does the same; complete-graph Two-Step stays ahead of both.
+We read this as evidence that the penalty weight is the crux, not that penalties are useless: Two-Step QAOA is useful
+precisely because the good weight is not known in advance.
+
+\paragraph{Cheaper initial states.}
+The biased product state $\bigotimes_i(\sqrt{1-k/n}\,|0\rangle+\sqrt{k/n}\,|1\rangle)$ needs no entangling gate and, by the
+same symmetry argument as Proposition~2, its weight-$k$ component is exactly the Dicke state. With post-selection it gives
+exactly the same landscape, at the price of a feasible fraction $(1-1/n)^{n-1}\to1/e$ for $k=1$ and $\binom{n}{n/2}2^{-n}$
+for half filling ($k=n/2$), the same as $|+\rangle^{\otimes n}$. Stage~1 trades entangling layers for shots: each of its layers costs $n(n-1)$ CNOTs on all-to-all
+hardware, and it raises the kept fraction of samples from $P_k^{\rm product}$ to $P_{\mathcal G}$, i.e.\ it saves $1/P_k^{\rm product}-1/P_{\mathcal G}$ shots per kept sample. Which side of this trade is better depends
+on the hardware (native XY or ZZ interactions, connectivity, error rates), which is why we do not use CNOT counts as the
+figure of merit; on hardware with cheap two-qubit gates stage~1 is preferable, on hardware where shots are cheap and gates
+are not, the biased product state is.
+
+\paragraph{The mixer matters.}
+With the ring mixer, a small penalty weight overtakes Two-Step at depth three to five for half filling; with the complete-graph mixer it does not. Since the post-selected landscape of Two-Step equals that of the Dicke-initialized ansatz, everything known about XY-mixer design~\cite{wang2020xy} carries over, and the choice of edge set should be part of the compilation pass.
+
+\paragraph{Permutation constraints.}
+Assignment, QAP and TSP impose one-hot constraints on both rows and columns. Only one family can be hardened with
+group-wise XY mixers, and the other must stay a penalty. In our $4\times4$ instances this raised the feasible fraction
+from a few percent to $0.6$--$0.85$ and improved on penalty QAOA by a factor $14$--$34$, but the quality inside the feasible set
+stayed close to uniform, so uniform sampling of permutations is as good for QAP and TSP. These problems need mixers that
+preserve permutations~\cite{Hadfield_2019}; Two-Step QAOA's stage~1 does not provide the corresponding initial state.
+
+\paragraph{Limitations.}
+All results are noiseless state-vector simulations with up to 16 qubits and small instance sets (5--20 per problem) (stage-1 tables up to 32 qubits per group).
+Training uses exact expectations and automatic differentiation; the shot counts we report are a budget proxy
+(two parameter-shift evaluations per angle) and not a finite-shot optimization. Noise that changes group weights (e.g.\ amplitude damping or bit flips; dephasing in the computational basis does not) breaks the conservation law of
+Proposition~1, so on hardware the post-selection also filters some noise-induced errors and its overhead grows in a noise-model-dependent way; we have
+not quantified this. The stage-1 table entries are the best values found by a local optimizer and are lower bounds on what
+is achievable. Finally, the matrix-based detector is heuristic; constraints should be passed explicitly.

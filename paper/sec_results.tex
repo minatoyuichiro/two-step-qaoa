@@ -1,0 +1,76 @@
+% 結果（数値は src/make_paper_assets.py が作る表・図と、notes/RESULTS_V3.md による）
+\subsection{Setup}
+\paragraph{Simulation.} Circuits are built with the blueqat SDK (GitHub version 2.2.0) from $R_Z$, $R_{ZZ}$, $R_X$, $R_{XX}$ and $R_{YY}$ gates.
+For the parameter sweeps we evaluate the same circuits with an equivalent dense state-vector routine (diagonal phases, single-qubit
+rotations and two-level XY rotations) and verify the optimized parameters against blueqat; unit tests compare all building blocks
+with exact matrix exponentials. Stage-1 tables are computed in the $(n+1)$-dimensional symmetric subspace, verified against the full
+$2^n$-dimensional evolution to $10^{-12}$ for $n\le9$. All probabilities, including the training objective, are computed exactly from the state vector; shots enter only through the cost accounting below and the final extraction.
+
+\paragraph{Training.} Every method is trained with the same procedure: the Hamiltonian is divided by its largest absolute entry,
+depths are grown one layer at a time (each depth is initialized by interpolating the previous solution~\cite{zhou2020qaoa}, by the
+previous solution with an appended zero layer, and by two random starts), and each start is run for 150 Adam steps keeping the best
+iterate. Constraint-preserving methods are trained on the expectation post-selected on the hardened constraints.
+
+\paragraph{Cost accounting.} One unit of sample cost is one measured bit string. Although the objective is evaluated exactly, a training evaluation is charged $1000$ shots and a
+gradient two evaluations per angle. This is an optimizer-budget proxy used to compare methods on equal terms, not a physical shot count: the layer angles control many gates whose generators have several spectral gaps, so a valid parameter-shift rule needs more evaluations. Post-selected
+training is charged $1/P_{\mathcal G}$ per evaluation. Every final extraction draws $1000$ shots and returns the best feasible sample;
+for penalty ladders the shots that decided to stop are the returned answer, and every rung's training and sampling is charged.
+
+\paragraph{Baselines.} \emph{Penalty QAOA} uses the full QUBO with the $X$ mixer. Its weight is chosen by
+(a) the ladder of the formulation library we take the problems from (an in-house library of QUBO formulations, snapshot of 2026-10-07): start at $A_{\rm start}$, double while the returned sample is infeasible, up to a
+weight $A_{\rm safe}$ that guarantees a feasible QUBO minimum. For the portfolio, $A_{\rm start}=2\max_i\big(|\ell_i|+\sum_{j\ne i}|q_{ij}|\big)$ and $A_{\rm safe}=\sum_i|\ell_i|+\sum_{i<j}|q_{ij}|+1$ in terms of the linear and quadratic cost coefficients; the other problems use the library's own bounds,
+(b) the same ladder from $A_{\rm start}/16$,
+(c) a grid $A\in\sigma\{0.03,0.1,0.3,1,3\}$, where $\sigma$ is the range of the cost over feasible solutions (obtained by enumeration, so this baseline is partially oracle-assisted), selected by the lowest cost among the feasible samples of $1000$ shots per grid point, ties broken by the larger number of feasible samples, and
+(d) the same grid selected by the exact $P_{\rm opt}$ (an oracle).
+Grids are charged all five training runs. We also report \emph{uniform sampling of feasible solutions} (a classical baseline),
+the \emph{biased product state} followed by XY layers and post-selection, and the \emph{Dicke-initialized} XY ansatz.
+
+\paragraph{Metrics.} $P_{\rm feas}$ and $P_{\rm opt}$ are the probabilities that one sample satisfies all constraints and that it is an
+optimum of the constrained problem; $P_{\rm opt|feas}=P_{\rm opt}/P_{\rm feas}$. We compare $P_{\rm opt}$, which determines the number of shots needed to see the optimum ($\approx 3/P_{\rm opt}$ for 95\% confidence), through per-instance ratios; the probability that a batch of $1000$ shots contains the optimum, $1-(1-P_{\rm opt})^{1000}$, follows from it.
+
+\subsection{Stage-1 tables}
+\input{tables/stage1}
+\begin{figure}[t]\centering
+\includegraphics[width=\linewidth]{stage1_table.pdf}
+\caption{Leakage $1-P_k$ of the tabulated stage-1 states versus depth. Left: half filling; right: one-hot.}
+\label{fig:stage1}
+\end{figure}
+Table~\ref{tab:stage1} and Fig.~\ref{fig:stage1} list the stage-1 states for group sizes up to $n=32$.
+For half filling, three layers reach $P_k\ge0.9945$ for every tested size ($n=4$--$32$; the lowest value is $0.99454$ at $n=32$), and four layers reach $P_k\ge0.996$; within the tested range, three layers are an observed sufficient depth independent of $n$.
+For one-hot groups the smallest depth found reaching $P_k\ge0.99$ grows: three layers up to $n=8$, four for $n=10$, five for $n=12$ and $n=20$, and six for $n=32$, while $n=16$ and $n=24$ stay at $0.989$ and $0.975$ at $p_1=6$. These are values found by local optimization, not lower limits on the depth.
+Plateaus such as $n=24$, $k=1$ at $p_1=3$ and $4$ show that the optimizer stopped in a local optimum, so these entries are lower bounds.
+For comparison, the entangling-free biased product state has $P_k\approx0.37$--$0.42\approx1/e$ for $k=1$ and $\binom{n}{n/2}2^{-n}$ ($0.14$--$0.27$ for $n\ge8$) for half filling.
+
+\subsection{Cardinality-constrained portfolios}
+\begin{figure}[t]\centering
+\includegraphics[width=\linewidth]{portfolio.pdf}
+\caption{Mean optimum probability versus depth for portfolio problems. The Dicke-initialized ansatz agrees with ring-mixer Two-Step up to the factor $P_{\mathcal G}$ (apart from rare differences in the local optimum reached by training) and is not drawn.}
+\label{fig:portfolio}
+\end{figure}
+\input{tables/portfolio}
+We use cardinality-constrained portfolios, $\min_x\,\tfrac12x^\top\Sigma x-\mu^\top x$ subject to $\sum_ix_i=k$, with $\Sigma=AA^\top/n$ for a standard normal $A$ and $\mu_i\sim U(0,1)$, for $(n,k)=(10,5)$, $(12,3)$ and $(12,6)$ and 20 random instances each (Fig.~\ref{fig:portfolio}, Table~\ref{tab:portfolio}).
+Three points stand out.
+
+\emph{At shallow depth Two-Step QAOA has the higher optimum probability.} At $p=1$ the median paired ratio is $3.6$--$5.6$ against uniform feasible sampling and $5.3$--$13.7$ against the ladder- and sample-selected penalty rules, in all 20 instances of every size; the oracle-tuned grid with five times the budget is behind by a median factor $1.7$--$5.3$ (Two-Step is better in 17, 20 and 18 of 20 instances).
+The ladder that starts from the formulation code's $A_{\rm start}$ always stops at its first rung, because a large weight produces feasible samples immediately; its optimum probability then stays within a factor of about two of uniform sampling at all depths. Selecting the weight from the grid by the sampled answers does not help either: it picks $A\ge0.3\sigma$ in 281 of the 300 (instance, depth) cases, where the optimum probability is low, presumably because batches from such weights already contain good feasible answers.
+
+\emph{With the ring mixer, a small penalty weight catches up at larger depth for half filling.} The ladder started from $A_{\rm start}/16$ (which also stopped at its first rung) improves quickly with depth: at $p=5$ it beats ring-mixer Two-Step in 15 of 20 instances for $(10,5)$ and 12 of 20 for $(12,6)$ (median ratios $0.67$ and $0.94$), at the same training budget, while it remains behind for $(12,3)$ (median $4.7$, 17 of 20). The oracle-tuned grid is better than ring-mixer Two-Step from $p=3$ on for half filling. A small weight leaves roughly half of the samples infeasible ($P_{\rm feas}\approx0.5$--$0.6$), but the $X$ mixer can move through infeasible strings, which the ring XY mixer cannot.
+
+\emph{With the complete-graph mixer, Two-Step is ahead at every depth.} Replacing the ring by all pairs of the group (the same number of two-qubit terms per layer as the cost layer) raises the optimum probability of Two-Step by a median factor $1.4$--$6.3$ (Table~\ref{tab:portfolio_complete}). In median it is then better than every baseline at every depth, including the oracle-tuned grid with five times the budget (median ratios $2.2$--$9.7$ at $p\ge3$, in 18--20 of 20 instances), and better than the small-weight ladder by median factors $2.9$--$17$ at $p=5$. The crossover in the previous paragraph was therefore a limitation of the ring mixer, not of the hard-constraint approach.
+\input{tables/portfolio_complete}
+
+Two further observations confirm the theory. The Corollary predicts $P_{\rm opt}^{\rm Two\text{-}Step}=P_{\mathcal G}P_{\rm opt}^{\rm Dicke}$ for identical stage-2 angles, and, applied to the biased product state (whose weight-$k$ component is also the Dicke state), a fixed ratio $P_{\mathcal G}/P_k^{\rm product}=4.06$, $3.84$ and $4.43$ for the three sizes. Since the three methods are trained from independent starts, the angles need not coincide; in practice both relations hold to within $0.1\%$ in 84--89\% of the (instance, depth) pairs, and the remaining pairs deviate by at most $3\%$ except one pair with $34\%$, where training reached a different local optimum. The median ratios for the ring-mixer biased product state in Table~\ref{tab:portfolio} equal the predicted values.
+
+\subsection{Detecting constraints}
+\input{tables/detect}
+We applied the detector of Sec.~\ref{sec:detect} to the QUBO matrices produced by the penalty builders of a library of 29 formulations (Table~\ref{tab:detect}); the truth is the list of constraints those builders were given.
+Of $562$ detections, $487$ are correct in both support and $k$ (precision $0.87$), but only $41\%$ of the $1179$ constraints are found.
+The support is usually recognized (candidate supports cover $983$ true supports), and the losses are where the Remark of Sec.~\ref{sec:theory} predicts them: when the cost has large linear terms on a group (facility location, shift scheduling, vehicle routing), $k$ is misread; when the cost adds to the couplings inside the group (portfolio) or inequality penalties dominate (bin packing, production), the support is missed; and unconstrained problems with uniform couplings (MaxCut, vertex cover) produce false constraints.
+The detector is therefore usable as a suggestion for formulations whose penalties dominate uniformly (assignment, coloring, QAP, TSP), but the constraints should be passed explicitly.
+
+\subsection{Several groups: coloring and permutation problems}
+\input{tables/multi}
+Table~\ref{tab:multi} uses problems from the same formulation library, with the library's own penalty ladders; Two-Step uses the ring mixer here.
+\emph{Graph 3-coloring} (dense random graphs with edge probability $0.7$; minimizing the number of monochromatic edges) has one one-hot group per vertex, all disjoint, so every constraint is hardened and no penalty weight remains.
+Two-Step then finds an optimal coloring with probability $0.93$ (5 vertices, 15 qubits) and $0.99$ (4 vertices, 12 qubits) at $p=5$, against $0.13$ and $0.40$ for penalty QAOA and $0.12$ and $0.31$ for uniform sampling. (The 12-qubit value is close to saturation, so the 15-qubit case is the informative one.)
+\emph{Permutation problems} (assignment, QAP, TSP on $4\times4$ variables) have one-hot rows and columns; only the rows are hardened and the columns remain penalties. Hardening raises $P_{\rm feas}$ from $0.03$--$0.06$ to $0.61$--$0.85$ and improves the optimum probability over penalty QAOA by a factor $14$--$34$. Against uniform sampling of permutations it is better for assignment ($0.114$ versus $0.042$) and on par for QAP ($0.063$ versus $0.058$) and TSP ($0.330$ versus $0.333$); the quality inside the feasible set is only modestly above uniform. With only 24 feasible permutations (and 8 optimal tours for TSP) these instances are small, and the comparison with uniform sampling is the relevant one.
