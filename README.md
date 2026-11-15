@@ -17,7 +17,7 @@ followed by post-selection on the hardened constraints.
 | `src/pipe.py` | layer-by-layer (INTERP) training, bootstrap interval |
 | `src/detect.py` | heuristic detection of k-hot penalties in a QUBO matrix |
 | `src/dicke_circuit.py` | Bärtschi–Eidenbenz Dicke-state circuit (for reference) |
-| `src/test_*.py` | checks against exact matrix exponentials, blueqat vs. fast routine, symmetric subspace vs. full space |
+| `src/test_*.py` | checks against exact matrix exponentials, blueqat vs. fast routine (`test_fast.py` at n=6, `test_blueqat_n10.py` at the size of the experiments), symmetric subspace vs. full space |
 | `src/exp_s2_table.py` | stage-1 tables (paper Table 1, Fig. 1) |
 | `src/exp_s1b.py` | portfolio experiments (paper Fig. 2, Tables 2–3) |
 | `src/exp_s3_detect.py`, `src/exp_s5.py` | detection and multi-group experiments (paper Tables 4–5). These need an in-house library of QUBO formulations that is **not** part of this repository; their raw results are included |

@@ -60,7 +60,13 @@ For one-hot and, more generally, k-hot constraints, the alternating-operator ans
 The usual starting point is a Dicke state, prepared by a dedicated circuit~\cite{B_rtschi_2019,baertschi2022short}.
 
 The first version of this work proposed to prepare that starting point with QAOA itself: a first stage driven by the penalty term only, followed by an XY-mixer stage driven by the cost only. This replaces the penalty weight and the Dicke circuit by a second QAOA run. The earlier versions described the idea without analysis or numerical evidence.
-This version adds both, and corrects several statements of the earlier versions. Our contributions are:
+This version adds both. It keeps the two-stage construction of the earlier versions (stage 1: transverse-field mixer and the constraint term without a weight; stage 2: XY mixer and the cost), and changes or sharpens the following points:
+(a) the stage-1 output was described as ``close to'' the initial state required by the XY mixer; we show that its feasible component is exactly a Dicke state and that the only deviation is a leakage probability $1-P_k$;
+(b) the constraint was said to become hard; this holds only together with post-selection of the measured samples, which we add to the method, because stage 2 cannot reduce the leakage;
+(c) the angles of both stages were to be found by a classical optimizer; stage 1 is now problem-independent and read from a table, and only stage 2 is trained;
+(d) the statement that no penalty weight has to be balanced applies to the constraints that are hardened; constraints that cannot be hardened (overlapping groups, inequalities) keep their penalties in the stage-2 cost;
+(e) the general review of adiabatic computation and QAOA is shortened, and the title and equations are corrected (k-hot instead of one-hot, layer-wise angles, an explicit mixer).
+Our contributions are:
 \begin{enumerate}
 \item \textbf{Exact properties} (Sec.~\ref{sec:theory}): stage 2 conserves the probability of satisfying the hardened constraints; the feasible component of the stage-1 state is exactly a (product of) Dicke state(s); Two-Step QAOA and the Dicke-initialized ansatz have the same post-selected landscape; and the k-hot structure of a penalty is not identifiable from a QUBO matrix alone.
 \item \textbf{A compilation pass} (Sec.~\ref{sec:software}): the constraints are taken as written in penalty form, stage 1 is looked up in a problem-independent table computed in the symmetric subspace, and no penalty weight is searched for the hardened constraints.
@@ -105,7 +111,7 @@ U_{XY}(\beta^{(2)}_l)\,e^{-i\gamma^{(2)}_l H_{C_2}},
 where $H_{C_2}$ is the original QUBO with the penalties of the hardened groups removed (penalties of constraints that are not hardened remain), and $U_{XY}$ is the XY mixer of Eq.~\eqref{eq:xyproduct} on the hardened groups (with the $X$ mixer on the remaining qubits). We use two edge sets inside a group: the parity-ordered ring ($|g|$ pairs per layer) and the complete graph ($|g|(|g|-1)/2$ pairs in lexicographic order, the same number of two-qubit terms as a dense cost layer); within a layer the pair rotations are applied in the listed order.
 All angles are layer-wise.
 The output is measured and samples violating a hardened constraint are discarded.
-In the first version the angles of both stages were to be optimized together; we instead fix stage 1 from a table and train stage 2 on the post-selected expectation of $H_{C_2}$, which Sec.~\ref{sec:theory} shows to be the natural objective.
+The earlier versions left open how the angles of the two stages are optimized; here stage 1 is fixed from a table and stage 2 is trained on the post-selected expectation of $H_{C_2}$, which Sec.~\ref{sec:theory} shows to be the natural objective.
 
 \input{sec_theory}
 
